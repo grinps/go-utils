@@ -1,3 +1,3 @@
-module github.com/shekhar-jha/go-utils/errext
+module github.com/grinps/go-utils/errext
 
 go 1.13
