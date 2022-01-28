@@ -38,7 +38,7 @@ func TestLog_EnvSetInvalidValue(t *testing.T) {
 	var logCollector = &strings.Builder{}
 	log.Default().SetOutput(logCollector)
 	t.Setenv(LogUtilEnableTraceEnvironmentName, "InvalidValue")
-	initialize()
+	Initialize()
 	t.Run("Empty message", func(t *testing.T) {
 		testCase(logCollector, t, "Empty message was logged incorrectly.", "", "")
 	})
@@ -62,7 +62,7 @@ func TestLog_TraceLogSet(t *testing.T) {
 	var logCollector = &strings.Builder{}
 	log.Default().SetOutput(logCollector)
 	t.Setenv(LogUtilEnableTraceEnvironmentName, LogUtilEnableTraceEnvironmentValue[0])
-	initialize()
+	Initialize()
 	t.Run("Empty message", func(t *testing.T) {
 		testCase(logCollector, t, "Empty message was logged incorrectly.", "Trace Log Util: ", "")
 	})
@@ -87,7 +87,7 @@ func TestLog_TraceLogAndDifferentFormatting(t *testing.T) {
 	log.Default().SetOutput(logCollector)
 	t.Setenv(LogUtilEnableTraceEnvironmentName, LogUtilEnableTraceEnvironmentValue[1])
 	t.Setenv(LogUtilTraceFormat, "TLU: %s [%s]")
-	initialize()
+	Initialize()
 	t.Run("Empty message", func(t *testing.T) {
 		testCase(logCollector, t, "Empty message was logged incorrectly.", "TLU:  []", "")
 	})
@@ -174,7 +174,7 @@ func TestWarn_EnvSetInvalidValue(t *testing.T) {
 	var logCollector = &strings.Builder{}
 	log.Default().SetOutput(logCollector)
 	t.Setenv(LogUtilDisableWarnEnvironmentName, "InvalidValue")
-	initialize()
+	Initialize()
 	t.Run("Empty message", func(t *testing.T) {
 		testCaseFunction(warnFunction, logCollector, t, "Empty message was logged incorrectly.", "logger_test.go:117: WARN: :", "")
 	})
@@ -198,7 +198,7 @@ func TestWarn_WarnDisableSet(t *testing.T) {
 	var logCollector = &strings.Builder{}
 	log.Default().SetOutput(logCollector)
 	t.Setenv(LogUtilDisableWarnEnvironmentName, LogUtilEnableTraceEnvironmentValue[0])
-	initialize()
+	Initialize()
 	t.Run("Empty message", func(t *testing.T) {
 		testCaseFunction(warnFunction, logCollector, t, "Empty message was logged incorrectly.", "", "")
 	})
@@ -222,7 +222,7 @@ func TestLog_WarnLogAndDifferentFormatting(t *testing.T) {
 	var logCollector = &strings.Builder{}
 	log.Default().SetOutput(logCollector)
 	t.Setenv(LogUtilWarnFormat, "WARNING: %s [%s]")
-	initialize()
+	Initialize()
 	t.Run("Empty message", func(t *testing.T) {
 		testCaseFunction(warnFunction, logCollector, t, "Empty message was logged incorrectly.", "logger_test.go:117: WARNING:  []", "")
 	})

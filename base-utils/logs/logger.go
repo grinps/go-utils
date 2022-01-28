@@ -24,10 +24,10 @@ var warnLogUtil bool = true
 var warnLogUtilFormat = LogUtilWarnFormatDefault
 
 func init() {
-	initialize()
+	Initialize()
 }
 
-func initialize() {
+func Initialize() {
 	traceLogUtilValue := os.Getenv(LogUtilEnableTraceEnvironmentName)
 	if contains(strings.ToUpper(traceLogUtilValue), LogUtilEnableTraceEnvironmentValue) {
 		traceLogUtil = true
