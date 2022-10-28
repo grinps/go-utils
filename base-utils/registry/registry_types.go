@@ -4,13 +4,13 @@ import (
 	"sync"
 )
 
-type registrationRecord[Key comparable] struct {
+type registrationRecord[Key comparable, Value any] struct {
 	key   Key
-	value interface{}
+	value Value
 	lock  *sync.RWMutex
 }
 
-type Register[Key comparable] struct {
-	register map[Key]*registrationRecord[Key]
+type Register[Key comparable, Value any] struct {
+	register map[Key]*registrationRecord[Key, Value]
 	lock     *sync.RWMutex
 }

@@ -9,7 +9,7 @@ import (
 
 type compareFunction[Key comparable] func(key Key, currentValue interface{}, expectedValue interface{}) (interface{}, bool)
 
-type operationFunction[Key comparable] func(registry *Register[Key], key Key, value interface{}) interface{}
+type operationFunction[Key comparable, Value any] func(registry *Register[Key, Value], key Key, value interface{}) interface{}
 
 type Test2Key bool
 
@@ -69,7 +69,7 @@ var NilKey = map[KeyType][]testCase{
 }
 
 func TestRegister_NilRegister(t *testing.T) {
-	var nilRegister *Register[*TestKey] = nil
+	var nilRegister *Register[*TestKey, any] = nil
 	t.Run("Nil Register Get Operation", func(t *testing.T) {
 		value := nilRegister.Get(nil)
 		if value != nil {
@@ -106,74 +106,74 @@ func TestRegister_DefaultRegister(t *testing.T) {
 	//t.Setenv("TRACE_LOG_UTIL_ENABLE", "TRUE")
 	//logger.Initialize()
 	t.Run("Default Register Get Operation", func(t *testing.T) {
-		var regTestKey = &Register[*TestKey]{}
-		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), getOperation[*TestKey], compareNil[*TestKey])
-		var regT2 = &Register[Test2Key]{}
-		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), getOperation[Test2Key], compareNil[Test2Key])
-		var regString = &Register[string]{}
-		runAllKeyValue[string](t, STRING, regString, t.Name(), getOperation[string], compareNil[string])
+		var regTestKey = &Register[*TestKey, any]{}
+		runAllKeyValue[*TestKey, any](t, TESTKEY, regTestKey, t.Name(), getOperation[*TestKey, any], compareNil[*TestKey])
+		var regT2 = &Register[Test2Key, any]{}
+		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), getOperation[Test2Key, any], compareNil[Test2Key])
+		var regString = &Register[string, any]{}
+		runAllKeyValue[string](t, STRING, regString, t.Name(), getOperation[string, any], compareNil[string])
 	})
 	t.Run("Default Register Set Get Operation", func(t *testing.T) {
-		var regTestKey = &Register[*TestKey]{}
-		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), setGetOperation[*TestKey], compareNil[*TestKey])
-		var regT2 = &Register[Test2Key]{}
-		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), setGetOperation[Test2Key], compareNil[Test2Key])
-		var regString = &Register[string]{}
-		runAllKeyValue[string](t, STRING, regString, t.Name(), setGetOperation[string], compareNil[string])
+		var regTestKey = &Register[*TestKey, any]{}
+		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), setGetOperation[*TestKey, any], compareNil[*TestKey])
+		var regT2 = &Register[Test2Key, any]{}
+		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), setGetOperation[Test2Key, any], compareNil[Test2Key])
+		var regString = &Register[string, any]{}
+		runAllKeyValue[string](t, STRING, regString, t.Name(), setGetOperation[string, any], compareNil[string])
 	})
 }
 
 func TestNewRegister(t *testing.T) {
 	t.Run("Empty Register Get operation", func(t *testing.T) {
-		var regTestKey = NewRegister[*TestKey]()
-		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), getOperation[*TestKey], compareNil[*TestKey])
-		var regT2 = NewRegister[Test2Key]()
-		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), getOperation[Test2Key], compareNil[Test2Key])
-		var regString = NewRegister[string]()
-		runAllKeyValue[string](t, STRING, regString, t.Name(), getOperation[string], compareNil[string])
+		var regTestKey = NewRegister[*TestKey, any]()
+		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), getOperation[*TestKey, any], compareNil[*TestKey])
+		var regT2 = NewRegister[Test2Key, any]()
+		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), getOperation[Test2Key, any], compareNil[Test2Key])
+		var regString = NewRegister[string, any]()
+		runAllKeyValue[string](t, STRING, regString, t.Name(), getOperation[string, any], compareNil[string])
 	})
 	t.Run("Empty Register Set Get operation", func(t *testing.T) {
-		var regTestKey = NewRegister[*TestKey]()
-		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), setGetOperation[*TestKey], compareEquals[*TestKey])
-		var regT2 = NewRegister[Test2Key]()
-		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), setGetOperation[Test2Key], compareEquals[Test2Key])
-		var regString = NewRegister[string]()
-		runAllKeyValue[string](t, STRING, regString, t.Name(), setGetOperation[string], compareEquals[string])
+		var regTestKey = NewRegister[*TestKey, any]()
+		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), setGetOperation[*TestKey, any], compareEquals[*TestKey])
+		var regT2 = NewRegister[Test2Key, any]()
+		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), setGetOperation[Test2Key, any], compareEquals[Test2Key])
+		var regString = NewRegister[string, any]()
+		runAllKeyValue[string](t, STRING, regString, t.Name(), setGetOperation[string, any], compareEquals[string])
 	})
 	t.Run("Empty Register Nil Key Set Get Operation", func(t *testing.T) {
-		var regTestKey = NewRegister[*TestKey]()
+		var regTestKey = NewRegister[*TestKey, any]()
 		for _, value := range VALUES {
-			runTest[*TestKey](t, regTestKey, ":*TestKey", NilKey[TESTKEY][0], value, setGetOperation[*TestKey], compareNil[*TestKey])
+			runTest[*TestKey](t, regTestKey, ":*TestKey", NilKey[TESTKEY][0], value, setGetOperation[*TestKey, any], compareNil[*TestKey])
 		}
-		var regT2 = NewRegister[Test2Key]()
+		var regT2 = NewRegister[Test2Key, any]()
 		for _, value := range VALUES {
-			runTest[Test2Key](t, regT2, ":Test2Key", NilKey[TEST2KEY][0], value, setGetOperation[Test2Key], compareNil[Test2Key])
+			runTest[Test2Key](t, regT2, ":Test2Key", NilKey[TEST2KEY][0], value, setGetOperation[Test2Key, any], compareNil[Test2Key])
 		}
-		var regString = NewRegister[string]()
+		var regString = NewRegister[string, any]()
 		for _, value := range VALUES {
-			runTest[string](t, regString, ":string", NilKey[STRING][0], value, setGetOperation[string], compareNil[string])
+			runTest[string](t, regString, ":string", NilKey[STRING][0], value, setGetOperation[string, any], compareNil[string])
 		}
 	})
 	t.Run("Multiple Get operation", func(t *testing.T) {
-		var regString = NewRegister[string]()
+		var regString = NewRegister[string, any]()
 		values := createRandomKeyValues(STRING, regString)
-		runAllKeyValue[string](t, STRING, regString, t.Name(), getOperation[string], func(key string, currentValue interface{}, expectedValue interface{}) (interface{}, bool) {
+		runAllKeyValue[string](t, STRING, regString, t.Name(), getOperation[string, any], func(key string, currentValue interface{}, expectedValue interface{}) (interface{}, bool) {
 			if currentValue == values[key] {
 				return values[key], true
 			}
 			return values[key], false
 		})
-		var regT2 = NewRegister[Test2Key]()
+		var regT2 = NewRegister[Test2Key, any]()
 		valuesT2 := createRandomKeyValues(TEST2KEY, regT2)
-		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), getOperation[Test2Key], func(key Test2Key, currentValue interface{}, expectedValue interface{}) (interface{}, bool) {
+		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), getOperation[Test2Key, any], func(key Test2Key, currentValue interface{}, expectedValue interface{}) (interface{}, bool) {
 			if currentValue == valuesT2[key] {
 				return valuesT2[key], true
 			}
 			return valuesT2[key], false
 		})
-		var regTestKey = NewRegister[*TestKey]()
+		var regTestKey = NewRegister[*TestKey, any]()
 		valTKey := createRandomKeyValues(TESTKEY, regTestKey)
-		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), getOperation[*TestKey], func(key *TestKey, currentValue interface{}, expectedValue interface{}) (interface{}, bool) {
+		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), getOperation[*TestKey, any], func(key *TestKey, currentValue interface{}, expectedValue interface{}) (interface{}, bool) {
 			if currentValue == valTKey[key] {
 				return valTKey[key], true
 			}
@@ -182,21 +182,21 @@ func TestNewRegister(t *testing.T) {
 
 	})
 	t.Run("Multiple Set and Get operation", func(t *testing.T) {
-		var regTestKey = NewRegister[*TestKey]()
+		var regTestKey = NewRegister[*TestKey, any]()
 		createRandomKeyValues(TESTKEY, regTestKey)
-		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), setGetOperation[*TestKey], compareEquals[*TestKey])
-		var regT2 = NewRegister[Test2Key]()
+		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), setGetOperation[*TestKey, any], compareEquals[*TestKey])
+		var regT2 = NewRegister[Test2Key, any]()
 		createRandomKeyValues(TEST2KEY, regT2)
-		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), setGetOperation[Test2Key], compareEquals[Test2Key])
-		var regString = NewRegister[string]()
+		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), setGetOperation[Test2Key, any], compareEquals[Test2Key])
+		var regString = NewRegister[string, any]()
 		createRandomKeyValues(STRING, regString)
-		runAllKeyValue[string](t, STRING, regString, t.Name(), setGetOperation[string], compareEquals[string])
+		runAllKeyValue[string](t, STRING, regString, t.Name(), setGetOperation[string, any], compareEquals[string])
 	})
 }
 
 func TestRegister_Unregister(t *testing.T) {
 	t.Run("Single Unregister operation", func(t *testing.T) {
-		var registry = NewRegister[*TestKey]()
+		var registry = NewRegister[*TestKey, any]()
 		values := createRandomKeyValues(TESTKEY, registry)
 		for _, key := range KEYS[TESTKEY] {
 			var tKey *TestKey = key.value.(*TestKey)
@@ -207,7 +207,7 @@ func TestRegister_Unregister(t *testing.T) {
 		}
 	})
 	t.Run("Multiple Unregister operation", func(t *testing.T) {
-		var registry = NewRegister[*TestKey]()
+		var registry = NewRegister[*TestKey, any]()
 		createRandomKeyValues(TESTKEY, registry)
 		for counter := 0; counter < 10; counter++ {
 			for _, key := range KEYS[TESTKEY] {
@@ -227,7 +227,7 @@ func TestRegister_Unregister(t *testing.T) {
 }
 
 func TestRegister_MultiThread(b *testing.T) {
-	var registry = NewRegister[*TestKey]()
+	var registry = NewRegister[*TestKey, any]()
 	values := createRandomKeyValues(TESTKEY, registry)
 	random := rand.New(rand.NewSource(time.Now().Unix()))
 	var waitGroup sync.WaitGroup
@@ -290,7 +290,7 @@ func TestRegister_MultiThread(b *testing.T) {
 
 }
 
-func runAllKeyValue[Key comparable](t *testing.T, registryType KeyType, registry *Register[Key], testType string, operation operationFunction[Key], compare compareFunction[Key]) {
+func runAllKeyValue[Key comparable, Value any](t *testing.T, registryType KeyType, registry *Register[Key, Value], testType string, operation operationFunction[Key, Value], compare compareFunction[Key]) {
 	for _, key := range KEYS[registryType] {
 		for _, value := range VALUES {
 			runTest(t, registry, testType, key, value, operation, compare)
@@ -298,19 +298,19 @@ func runAllKeyValue[Key comparable](t *testing.T, registryType KeyType, registry
 	}
 }
 
-func createRandomKeyValues[Key comparable](registryType KeyType, registry *Register[Key]) map[Key]interface{} {
+func createRandomKeyValues[Key comparable, Value any](registryType KeyType, registry *Register[Key, Value]) map[Key]Value {
 	numberOfValues := len(VALUES)
 	random := rand.New(rand.NewSource(time.Now().Unix()))
-	var valueSequence = make(map[Key]interface{})
+	var valueSequence = make(map[Key]Value)
 	for _, key := range KEYS[registryType] {
 		value := VALUES[random.Intn(numberOfValues)]
-		registry.Register(key.value.(Key), value.value)
-		valueSequence[key.value.(Key)] = value.value
+		registry.Register(key.value.(Key), value.value.(Value))
+		valueSequence[key.value.(Key)] = value.value.(Value)
 	}
 	return valueSequence
 }
 
-func runTest[Key comparable](t *testing.T, registry *Register[Key], testType string, key testCase, value testCase, operation operationFunction[Key], compare compareFunction[Key]) {
+func runTest[Key comparable, Value any](t *testing.T, registry *Register[Key, Value], testType string, key testCase, value testCase, operation operationFunction[Key, Value], compare compareFunction[Key]) {
 	t.Run(testType+":"+key.name+"("+value.name+")", func(t *testing.T) {
 		var nilKey Key
 		if key.value == nilKey {
@@ -341,20 +341,20 @@ func compareNil[Key comparable](key Key, value interface{}, expectedValue interf
 	return nil, false
 }
 
-func getOperation[Key comparable](registry *Register[Key], key Key, value interface{}) interface{} {
+func getOperation[Key comparable, Value any](registry *Register[Key, Value], key Key, value interface{}) interface{} {
 	return registry.Get(key)
 }
 
-func setGetOperation[Key comparable](registry *Register[Key], key Key, value interface{}) interface{} {
+func setGetOperation[Key comparable, Value any](registry *Register[Key, Value], key Key, value Value) interface{} {
 	registry.Register(key, value)
 	return registry.Get(key)
 }
 
-func unregisterOperation[Key comparable](registry *Register[Key], key Key, value interface{}) interface{} {
+func unregisterOperation[Key comparable, Value any](registry *Register[Key, Value], key Key, value interface{}) interface{} {
 	return registry.Unregister(key)
 }
 
-func unRegisterAndGet[Key comparable](registry *Register[Key], key Key, value interface{}) interface{} {
+func unRegisterAndGet[Key comparable, Value any](registry *Register[Key, Value], key Key, value interface{}) interface{} {
 	registry.Unregister(key)
 	return registry.Get(key)
 }
