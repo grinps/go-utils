@@ -16,7 +16,7 @@ func NewErrorCodeWithOptions(options ...ErrorCodeOptions) ErrorCode {
 		newErrorCode = errCodeOption(newErrorCode)
 	}
 	if !newErrorCode.errorCodeSet || newErrorCode.errorCode == ErrorCodeNotSet {
-		newErrorCode.errorCode = ErrorCodeUnknown
+		newErrorCode.errorCode = nextErrorCodeForType(newErrorCode.errorCodeType)
 		newErrorCode.errorCodeSet = true
 	}
 	return newErrorCode
@@ -35,7 +35,7 @@ var ErrCodeInvalidErrorCode = &ErrorCodeImpl{
 // WithErrorCode provides option to create [errext.ErrorCode] for given [errext.ErrorCodeValue] of  [errext.DefaultErrorCodeTypeObject]
 // type.
 //
-// This option is available for backward compatibility and generated error codes ([errext.WithErrorType] should be used.
+// This option is available for backward compatibility and option with generated error code values (for example [errext.WithErrorType]) should be used.
 func WithErrorCode(errorCode ErrorCodeValue) ErrorCodeOptions {
 	return WithUniqueCodeAndType(false, errorCode, DefaultErrorCodeTypeObject)
 }

@@ -32,7 +32,7 @@ func (wrappedError *Error) Error() string {
 // ErrorCode defines an interface to create errors based on pre-defined standards and capture specific information needed.
 // For example in case a set of invalid input errors need to be created, a standard [errext.ErrorCode] can be defined and then
 // on detection of error, specific parameter values can be provided to create the actual error and return. This error can then
-// be used by calling function to verify whether Error is of type Input Validation ( [errext.ErrorCode.AsError] ) or validate the parameter
+// be used by calling function to verify whether Error is of type Input Validation ( [errext.ErrorCodeImpl.AsError] ) or validate the parameter
 // responsible for error.
 type ErrorCode interface {
 	// New returns an instance of error created using the passed text.
@@ -73,6 +73,7 @@ type ErrorCodeImpl struct {
 	errorCode     ErrorCodeValue // ErrorCodeValue associated with this [errext.ErrorCode]
 	errorCodeSet  bool           // Whether ErrorCodeValue has been set or not
 	errorCodeType ErrorType      //Type of error.
+	template      *errTemplate   // Template to create new errors using parameters
 }
 
 // New returns instance of error using given error string.
@@ -105,7 +106,11 @@ func (errorCode *ErrorCodeImpl) NewWithError(text string, err error) error {
 
 // NewWithErrorF returns instance of error by using the given arguments and causing err.
 func (errorCode *ErrorCodeImpl) NewWithErrorF(err error, arguments ...interface{}) error {
-	return errorCode.NewWithError(PrintArguments(arguments...), err)
+	if errorCode != nil {
+		return errorCode.NewWithError(printArguments(generateFromTemplate(errorCode.template, arguments...)...), err)
+	} else {
+		return errorCode.NewWithError(printArguments(arguments...), err)
+	}
 }
 
 // AsError validates whether the given error is an instance of [errext.Error] and returns its reference if available nil otherwise.
@@ -122,7 +127,7 @@ func (errorCode *ErrorCodeImpl) AsError(err error) (*Error, bool) {
 	return nil, false
 }
 
-func PrintArguments(args ...interface{}) (returnValue string) {
+func printArguments(args ...interface{}) (returnValue string) {
 	returnValue = "Error message could not be generated."
 	printValue := fmt.Sprintln(args...)
 	returnValue = strings.Trim(printValue, "\n")
