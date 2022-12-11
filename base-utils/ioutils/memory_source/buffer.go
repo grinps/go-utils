@@ -57,9 +57,20 @@ type Buffer struct {
 
 const MemoryBufferErrors string = "MemoryBufferErrors"
 
+const (
+	ErrParameterReason                        = "reason"
+	ErrToLargeReasonMaxSizeExceeded           = "allowed max size exceeded"
+	ErrToLargeReasonAllocationFailed          = "failure to allocate additional memory"
+	ErrToLargeReasonRingBuffer                = "buffer is a ring buffer and can not be extended"
+	ErrInconsistentStateReasonWriteBeforeRead = "write offset < read offset"
+	ErrTypeMemoryBufferErrors                 = errext.ErrorType(MemoryBufferErrors)
+)
+
 // ErrTooLarge if memory cannot be allocated to store data in a buffer.
-var ErrTooLarge = errext.NewErrorCodeOfType(1, MemoryBufferErrors)
-var ErrInconsistentState = errext.NewErrorCodeOfType(2, MemoryBufferErrors)
+var ErrTooLarge = errext.NewErrorCodeWithOptions(errext.WithErrorType(ErrTypeMemoryBufferErrors),
+	errext.WithTemplate("Requested buffer size too large due to", "["+ErrParameterReason+"]"))
+var ErrInconsistentState = errext.NewErrorCodeWithOptions(errext.WithErrorType(ErrTypeMemoryBufferErrors),
+	errext.WithTemplate("Buffer is in inconsistent state with ", "["+ErrParameterReason+"]"))
 
 const BufferMinSize = 64                 // smallest allocation for buffer storage
 const BufferMaxSize = int(^uint(0) >> 1) // maximum size for storage
@@ -141,7 +152,7 @@ func (b *Buffer) grow(n int) (int, error) {
 	}
 	c := cap(b.buf)
 	if c > BufferMaxSize-c-n {
-		return -1, ErrTooLarge.NewF("Memory buffer too large", b, " allowed max size", BufferMaxSize, "current cap", c, "requested increase", n)
+		return -1, ErrTooLarge.NewF(ErrParameterReason, ErrToLargeReasonMaxSizeExceeded, errext.NewField("Allowed Max Size", BufferMaxSize), errext.NewField("current cap", c), errext.NewField("requested increase", n), errext.NewField("Buffer", b))
 	}
 	var growErr error = nil
 	if n <= c/2-m {
@@ -170,7 +181,9 @@ func growSlice(b []byte, n int) (returnBytes []byte, returnErr error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			returnBytes = nil
-			returnErr = ErrTooLarge.NewF("Memory buffer ", b, " failed to grow by ", n, " due to panic with result ", recovered)
+			returnErr = ErrTooLarge.NewF(ErrParameterReason, ErrToLargeReasonAllocationFailed,
+				errext.NewField("requested increase", n),
+				errext.NewField("panic", recovered), errext.NewField("Memory buffer ", b))
 		}
 	}()
 	// TODO(http://golang.org/issue/51462): We should rely on the append-make
@@ -245,12 +258,13 @@ func (b *Buffer) Write(p []byte) (writtenBytes int, writeErr error) {
 				writtenBytes = copy(b.buf[b.writeOff:], p[:maxDataThatCanBeWritten])
 				b.writeOff += writtenBytes
 				if (BufferFullStopOnEnd|BufferFullExpandToMax)&b.config.OnBufferFull > 0 {
-					writeErr = ErrTooLarge.NewF("Buffer", b, "is full and can not be expanded.Configuration", b.config, "current size", len(b.buf))
+					writeErr = ErrTooLarge.NewF(ErrParameterReason, ErrToLargeReasonMaxSizeExceeded, errext.NewField("Allowed Max Size", b.config.MaxSize),
+						errext.NewField("current length", len(b.buf)), errext.NewField("requested increase", newSizeOfBuffer-sizeOfBuffer), errext.NewField("config", b.config), errext.NewField("Buffer", b))
 				} else if BufferFullContinueFromStart&b.config.OnBufferFull > 0 {
 					additionalBytesWritten := fillARingBuffer(b, p, writtenBytes)
 					writtenBytes += additionalBytesWritten
 					if writtenBytes < len(p) {
-						writeErr = ErrTooLarge.NewF("Ring Buffer", b, "is full and can not be expanded. Configuration", b.config, "current size", len(b.buf))
+						writeErr = ErrTooLarge.NewF(ErrParameterReason, ErrToLargeReasonRingBuffer, "current length", len(b.buf), errext.NewField("config", b.config))
 					}
 				} else { //BufferFullDropOnEnd
 					logger.Log("Dropping ", sizeOfDataToWrite-maxDataThatCanBeWritten, " while writing to buffer", b)
@@ -280,7 +294,8 @@ func (b *Buffer) Write(p []byte) (writtenBytes int, writeErr error) {
 			}
 		} else {
 			logger.Warn("Buffer ", b, " has write offset ", b.writeOff, " less than read ", b.readOff, " even though it is not a ring buffer (", b.config.OnBufferFull, ").")
-			writeErr = ErrInconsistentState.NewF("Buffer", b, "is not ring buffer but write offset < read offset. Configuration", b.config, "size", len(b.buf), "read offset", b.readOff, "write offset", b.writeOff)
+			writeErr = ErrInconsistentState.NewF(ErrParameterReason, ErrInconsistentStateReasonWriteBeforeRead,
+				errext.NewField("config", b.config), errext.NewField("size", len(b.buf)), errext.NewField("read offset", b.readOff), errext.NewField("write offset", b.writeOff))
 		}
 	}
 	return

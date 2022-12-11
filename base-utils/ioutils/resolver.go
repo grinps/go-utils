@@ -15,22 +15,43 @@ type ResolverSystem struct {
 	initialized bool
 }
 
-var ResolverNotInitialized = errext.NewErrorCodeOfType(1, ResolverErrorCodeType)
-var ResolverInvalidValue = errext.NewErrorCodeOfType(2, ResolverErrorCodeType)
-var ResolverMissingResolver = errext.NewErrorCodeOfType(3, ResolverErrorCodeType)
-var ResolverSourceConfigCreationFailed = errext.NewErrorCodeOfType(4, ResolverErrorCodeType)
-var ResolverSourceResolutionFailed = errext.NewErrorCodeOfType(5, ResolverErrorCodeType)
+var resolverErrorCodeType = errext.ErrorType(ResolverErrorCodeType)
+var ResolverNotInitialized = errext.NewErrorCodeWithOptions(errext.WithErrorType(resolverErrorCodeType),
+	errext.WithTemplate("Resolver is not initialized properly."))
+
+const (
+	ResolverInvalidValueReasonEmptyString = "empty string"
+	ResolverInvalidValueReasonNil         = "nil"
+	ErrResolverParamAttribute             = "attribute"
+	ErrResolverParamSourceType            = "sourceType"
+)
+
+var ResolverInvalidValue = errext.NewErrorCodeWithOptions(errext.WithErrorType(ResolverErrorCodeType),
+	errext.WithTemplate("Invalid", "["+ErrResolverParamAttribute+"]", "value was provided as", "[reason]"))
+var ResolverMissingResolver = errext.NewErrorCodeWithOptions(errext.WithErrorType(ResolverErrorCodeType),
+	errext.WithTemplate("No associated resolver for", "["+ErrResolverParamSourceType+"]", "could be located"))
+var ResolverSourceConfigCreationFailed = errext.NewErrorCodeWithOptions(errext.WithErrorType(ResolverErrorCodeType),
+	errext.WithTemplate("Failed to create config for source type", "["+ErrResolverParamSourceType+"]", "using impl", "[resolver]"))
+
+const (
+	ResolverSourceResolutionFailedReasonCreationFailed       = "failure to create source"
+	ResolverSourceResolutionFailedReasonMismatchedSourceType = "mismatched source type"
+	ResolverSourceResolutionFailedReasonConfigError          = "failure to create config"
+)
+
+var ResolverSourceResolutionFailed = errext.NewErrorCodeWithOptions(errext.WithErrorType(ResolverErrorCodeType),
+	errext.WithTemplate("Failed to resolve source", "["+ErrResolverParamSourceType+"]", "due to", "[errorMessage]", ". Config =", "[config]"))
 
 func (system *ResolverSystem) Register(context context.Context, sourceTypeName SourceTypeName, sourceType SourceType) (SourceType, error) {
 	logger.Log("Registering source type ", sourceTypeName, " as ", sourceType)
 	var returnErrorCode error = nil
 	var returnSourceType SourceType = nil
 	if system == nil || !system.initialized || system.registry == nil {
-		returnErrorCode = ResolverNotInitialized.New("Resolver is not initialized properly.")
+		returnErrorCode = ResolverNotInitialized.NewF()
 	} else if sourceTypeName == "" {
-		returnErrorCode = ResolverInvalidValue.New("Source type name is empty string")
+		returnErrorCode = ResolverInvalidValue.NewF("attribute", "Source type name", "reason", ResolverInvalidValueReasonEmptyString)
 	} else if sourceType == nil {
-		returnErrorCode = ResolverInvalidValue.New("Nil source type implementation was passed.")
+		returnErrorCode = ResolverInvalidValue.NewF("attribute", "Source type", "reason", ResolverInvalidValueReasonNil)
 	} else {
 		logger.Log("Registering source type ", sourceTypeName)
 		//TODO Add new API that allows registration only if not already registered.
@@ -50,7 +71,9 @@ func (system *ResolverSystem) NewSourceConfig(context context.Context, sourceTyp
 	if resolver != nil {
 		config, configErr := resolver.NewConfig(context)
 		if configErr != nil {
-			returnError = ResolverSourceConfigCreationFailed.NewWithErrorF(configErr, "Failed to create config for source type ", sourceType, " using impl ", resolver)
+			returnError = ResolverSourceConfigCreationFailed.NewWithErrorF(configErr,
+				errext.NewField("sourceType", sourceType),
+				errext.NewField("resolver", resolver))
 		} else {
 			returnConfig = config
 		}
@@ -69,7 +92,8 @@ func (system *ResolverSystem) Resolve(context context.Context, sourceType Source
 		sourceCreated, sourceCreationFailure := resolver.NewSource(context, config)
 		logger.Log("New source created as ", sourceCreated)
 		if sourceCreationFailure != nil {
-			returnError = ResolverSourceResolutionFailed.NewWithErrorF(sourceCreationFailure, "Failed to create source for ", sourceType, " with config ", config)
+			returnError = ResolverSourceResolutionFailed.NewWithErrorF(sourceCreationFailure, "sourceType", sourceType,
+				"errorMessage", ResolverSourceResolutionFailedReasonCreationFailed, "config", config)
 		} else {
 			returnValue = sourceCreated
 		}
@@ -82,14 +106,14 @@ func (system *ResolverSystem) getResolver(context context.Context, sourceType So
 	var returnSourceType SourceType = nil
 	var returnError error = nil
 	if system == nil || !system.initialized || system.registry == nil {
-		returnError = ResolverNotInitialized.New("Resolver is not initialized properly.")
+		returnError = ResolverNotInitialized.NewF()
 	} else if sourceType == "" {
-		returnError = ResolverInvalidValue.New("Source type name is empty string")
+		returnError = ResolverInvalidValue.NewF("attribute", "Source type name", "reason", ResolverInvalidValueReasonEmptyString)
 	} else {
 		resolver := system.registry.Get(sourceType)
 		logger.Log("Resolver found ", resolver)
 		if resolver == nil {
-			returnError = ResolverMissingResolver.NewF("No associated resolver for ", sourceType, " could be located")
+			returnError = ResolverMissingResolver.NewF(errext.NewField("sourceType", sourceType))
 		} else {
 			returnSourceType = resolver
 		}
@@ -149,7 +173,7 @@ func ResolveEWithResolverSystem[T Source, V SourceConfig](context context.Contex
 	var returnSource T
 	var sourceConfigType V
 	if resolverSystem == nil {
-		return returnSource, ResolverInvalidValue.New("No resolver system was passed.")
+		return returnSource, ResolverInvalidValue.NewF("attribute", "Resolver System", "reason", ResolverInvalidValueReasonNil)
 	}
 	sourceConfig, configErr := resolverSystem.NewSourceConfig(context, sourceTypeName)
 	if configErr == nil {
@@ -169,10 +193,15 @@ func ResolveEWithResolverSystem[T Source, V SourceConfig](context context.Contex
 		} else if sourceAsT, isTypeT := source.(T); isTypeT {
 			returnSource = sourceAsT
 		} else {
-			returnError = ResolverSourceResolutionFailed.NewF("Failed to resolve source of type ", sourceTypeName, " due to mismatched source. Expected type ", reflect.TypeOf(returnSource), "actual", reflect.TypeOf(source))
+			returnError = ResolverSourceResolutionFailed.NewF(
+				"sourceType", sourceTypeName,
+				"errorMessage", ResolverSourceResolutionFailedReasonMismatchedSourceType, "config", sourceConfig,
+				errext.NewField("Expected type", reflect.TypeOf(returnSource)), errext.NewField("actual", reflect.TypeOf(source)))
 		}
 	} else {
-		returnError = ResolverSourceResolutionFailed.NewWithErrorF(configErr, "Failed to resolve for source name ", sourceTypeName, " due to config creation error.")
+		returnError = ResolverSourceResolutionFailed.NewF(
+			"sourceType", sourceTypeName,
+			"errorMessage", ResolverSourceResolutionFailedReasonConfigError, "config", sourceConfig)
 	}
 	return returnSource, returnError
 }

@@ -7,9 +7,14 @@ import (
 	"io"
 )
 
-const MemorySourceErrors string = "MemorySourceErrors"
+const (
+	MemorySourceErrors                             string = "MemorySourceErrors"
+	MemorySourceInvalidConfigurationErrNoConfig           = "no configuration provided"
+	MemorySourceInvalidConfigurationErrInvalidType        = "config of invalid type"
+)
 
-var MemorySourceInvalidConfiguration = errext.NewErrorCodeOfType(1, MemorySourceErrors)
+var MemorySourceInvalidConfiguration = errext.NewErrorCodeWithOptions(errext.WithErrorType(errext.ErrorType(MemorySourceErrors)),
+	errext.WithTemplate("Memory source configuration is invalid due to", "["+ErrParameterReason+"]"))
 
 type MemorySource struct {
 	memory *Buffer

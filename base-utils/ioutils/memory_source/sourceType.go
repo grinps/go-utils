@@ -3,6 +3,7 @@ package memory_source
 import (
 	"context"
 	"github.com/grinps/go-utils/base-utils/ioutils"
+	"github.com/grinps/go-utils/errext"
 	"reflect"
 )
 
@@ -26,10 +27,10 @@ func (memory *MemorySourceType) NewSource(context context.Context, config ioutil
 	var returnSource ioutils.Source = nil
 	var returnError error = nil
 	if config == nil {
-		return nil, MemorySourceInvalidConfiguration.New("No configuration was provided.")
+		return nil, MemorySourceInvalidConfiguration.NewF(ErrParameterReason, MemorySourceInvalidConfigurationErrNoConfig)
 	}
 	if memorySourceConfig, isCorrectConfig := config.(*MemorySourceConfig); !isCorrectConfig {
-		return nil, MemorySourceInvalidConfiguration.NewF("Memory source config expected, actual", reflect.TypeOf(config))
+		return nil, MemorySourceInvalidConfiguration.NewF(ErrParameterReason, MemorySourceInvalidConfigurationErrInvalidType, errext.NewField("ActualType", reflect.TypeOf(config)))
 	} else {
 		memorySource := &MemorySource{
 			config: memorySourceConfig,
