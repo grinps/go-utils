@@ -92,7 +92,11 @@ func (registry *Register[Key, Value]) getRegistrationRecord(key Key) *registrati
 	logger.Log("Locking read lock with deferred unlock on entry", registry)
 	registry.lock.RLock()
 	defer deferredRUnlock(registry, registry.lock)
-	if recordInternal, ok := registry.register[key]; ok && recordInternal != nil {
+	var applicableKey interface{} = key
+	if keyAsKey, isCustomKey := applicableKey.(CustomKey); isCustomKey {
+		applicableKey = keyAsKey.Unique()
+	}
+	if recordInternal, ok := registry.register[applicableKey]; ok && recordInternal != nil {
 		record = recordInternal
 		logger.Log("Located existing record on entry", registry)
 	}
@@ -108,11 +112,15 @@ func (registry *Register[Key, Value]) setRegistrationRecord(key Key, record *reg
 		logger.Log("Locking lock on entry", registry)
 		registry.lock.Lock()
 		defer deferredUnlock(registry, registry.lock)
-		if internalCurrentValue, ok := registry.register[key]; ok {
+		var applicableKey interface{} = key
+		if keyAsKey, isCustomKey := applicableKey.(CustomKey); isCustomKey {
+			applicableKey = keyAsKey.Unique()
+		}
+		if internalCurrentValue, ok := registry.register[applicableKey]; ok {
 			exitingRecord = internalCurrentValue
 			logger.Log("Got current value from register ", registry, " for key ", key, " as ", internalCurrentValue)
 		}
-		registry.register[key] = record
+		registry.register[applicableKey] = record
 		logger.Log("Set current value in register ", registry, " for key ", key, " as ", record)
 	}
 	return exitingRecord
@@ -126,9 +134,13 @@ func (registry *Register[Key, Value]) Unregister(key Key) Value {
 		logger.Log("Locking lock with deferred unlock on entry", registry)
 		registry.lock.Lock()
 		defer deferredUnlock(registry, registry.lock)
-		if currentEntryInMap, ok := registry.register[key]; ok {
+		var applicableKey interface{} = key
+		if keyAsKey, isCustomKey := applicableKey.(CustomKey); isCustomKey {
+			applicableKey = keyAsKey.Unique()
+		}
+		if currentEntryInMap, ok := registry.register[applicableKey]; ok {
 			logger.Log("Registration record located for key", key, "value", currentEntryInMap)
-			delete(registry.register, key)
+			delete(registry.register, applicableKey)
 			logger.Log("Deleted key from map")
 			if currentEntryInMap != nil {
 				currentEntry = currentEntryInMap.Get()
@@ -150,9 +162,8 @@ func deferredUnlock(registry interface{}, lock *sync.RWMutex) {
 func deferredRUnlock(registry interface{}, lock *sync.RWMutex) {
 	logger.Log("Unlocking read lock on entry", registry)
 	lock.RUnlock()
-
 }
 
 func NewRegister[Key comparable, Value any]() *Register[Key, Value] {
-	return &Register[Key, Value]{register: map[Key]*registrationRecord[Key, Value]{}, lock: &sync.RWMutex{}}
+	return &Register[Key, Value]{register: map[interface{}]*registrationRecord[Key, Value]{}, lock: &sync.RWMutex{}}
 }

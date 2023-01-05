@@ -11,6 +11,10 @@ type registrationRecord[Key comparable, Value any] struct {
 }
 
 type Register[Key comparable, Value any] struct {
-	register map[Key]*registrationRecord[Key, Value]
+	register map[interface{}]*registrationRecord[Key, Value]
 	lock     *sync.RWMutex
+}
+
+type CustomKey interface {
+	Unique() string
 }

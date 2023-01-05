@@ -25,6 +25,13 @@ type TestKey struct {
 	keyName string
 }
 
+func (key *TestKey) Unique() string {
+	if key == nil {
+		return ""
+	}
+	return key.keyName
+}
+
 func (key TestKey) String() string {
 	return key.keyName
 }
@@ -304,8 +311,14 @@ func createRandomKeyValues[Key comparable, Value any](registryType KeyType, regi
 	var valueSequence = make(map[Key]Value)
 	for _, key := range KEYS[registryType] {
 		value := VALUES[random.Intn(numberOfValues)]
-		registry.Register(key.value.(Key), value.value.(Value))
-		valueSequence[key.value.(Key)] = value.value.(Value)
+		if value.value == nil {
+			var aNilValue Value
+			registry.Register(key.value.(Key), aNilValue)
+			valueSequence[key.value.(Key)] = aNilValue
+		} else {
+			registry.Register(key.value.(Key), value.value.(Value))
+			valueSequence[key.value.(Key)] = value.value.(Value)
+		}
 	}
 	return valueSequence
 }
