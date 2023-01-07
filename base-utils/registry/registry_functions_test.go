@@ -9,7 +9,7 @@ import (
 
 type compareFunction[Key comparable] func(key Key, currentValue interface{}, expectedValue interface{}) (interface{}, bool)
 
-type operationFunction[Key comparable, Value any] func(registry *Register[Key, Value], key Key, value interface{}) interface{}
+type operationFunction[Key any, Value any] func(registry Register[Key, Value], key Key, value interface{}) interface{}
 
 type Test2Key bool
 
@@ -21,18 +21,19 @@ const (
 	TEST2KEY = 3
 )
 
+type TestIntKey[T int] int
+
+func (key TestIntKey[T]) Unique() T {
+	return T(key)
+}
+
+var testKey CustomKey[int] = TestIntKey[int](1)
+
 type TestKey struct {
 	keyName string
 }
 
-func (key *TestKey) Unique() string {
-	if key == nil {
-		return ""
-	}
-	return key.keyName
-}
-
-func (key TestKey) String() string {
+func (key *TestKey) String() string {
 	return key.keyName
 }
 
@@ -76,32 +77,32 @@ var NilKey = map[KeyType][]testCase{
 }
 
 func TestRegister_NilRegister(t *testing.T) {
-	var nilRegister *Register[*TestKey, any] = nil
-	t.Run("Nil Register Get Operation", func(t *testing.T) {
+	var nilRegister *registryComparable[*TestKey, *TestKey, any] = nil
+	t.Run("Nil registryComparable Get Operation", func(t *testing.T) {
 		value := nilRegister.Get(nil)
 		if value != nil {
 			t.Error("Failed test. Expected", nil, "Actual", value)
 		}
 	})
-	t.Run("Nil Register register operation", func(t *testing.T) {
+	t.Run("Nil registryComparable register operation", func(t *testing.T) {
 		value := nilRegister.Register(nil, nil)
 		if value != nil {
 			t.Error("Failed test. Expected", nil, "Actual", value)
 		}
 	})
-	t.Run("Nil Register Get registration record Operation", func(t *testing.T) {
+	t.Run("Nil registryComparable Get registration record Operation", func(t *testing.T) {
 		value := nilRegister.getRegistrationRecord(nil)
 		if value != nil {
 			t.Error("Failed test. Expected", nil, "Actual", value)
 		}
 	})
-	t.Run("Nil Register Set registration record Operation", func(t *testing.T) {
+	t.Run("Nil registryComparable Set registration record Operation", func(t *testing.T) {
 		value := nilRegister.setRegistrationRecord(nil, nil)
 		if value != nil {
 			t.Error("Failed test. Expected", nil, "Actual", value)
 		}
 	})
-	t.Run("Nil Register Unregister Operation", func(t *testing.T) {
+	t.Run("Nil registryComparable Unregister Operation", func(t *testing.T) {
 		value := nilRegister.Unregister(nil)
 		if value != nil {
 			t.Error("Failed test. Expected", nil, "Actual", value)
@@ -112,26 +113,26 @@ func TestRegister_NilRegister(t *testing.T) {
 func TestRegister_DefaultRegister(t *testing.T) {
 	//t.Setenv("TRACE_LOG_UTIL_ENABLE", "TRUE")
 	//logger.Initialize()
-	t.Run("Default Register Get Operation", func(t *testing.T) {
-		var regTestKey = &Register[*TestKey, any]{}
+	t.Run("Default registryComparable Get Operation", func(t *testing.T) {
+		var regTestKey Register[*TestKey, any] = &registryComparable[*TestKey, *TestKey, any]{}
 		runAllKeyValue[*TestKey, any](t, TESTKEY, regTestKey, t.Name(), getOperation[*TestKey, any], compareNil[*TestKey])
-		var regT2 = &Register[Test2Key, any]{}
+		var regT2 Register[Test2Key, any] = &registryComparable[Test2Key, Test2Key, any]{}
 		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), getOperation[Test2Key, any], compareNil[Test2Key])
-		var regString = &Register[string, any]{}
+		var regString Register[string, any] = &registryComparable[string, string, any]{}
 		runAllKeyValue[string](t, STRING, regString, t.Name(), getOperation[string, any], compareNil[string])
 	})
-	t.Run("Default Register Set Get Operation", func(t *testing.T) {
-		var regTestKey = &Register[*TestKey, any]{}
+	t.Run("Default registryComparable Set Get Operation", func(t *testing.T) {
+		var regTestKey Register[*TestKey, any] = &registryComparable[*TestKey, *TestKey, any]{}
 		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), setGetOperation[*TestKey, any], compareNil[*TestKey])
-		var regT2 = &Register[Test2Key, any]{}
+		var regT2 Register[Test2Key, any] = &registryComparable[Test2Key, Test2Key, any]{}
 		runAllKeyValue[Test2Key](t, TEST2KEY, regT2, t.Name(), setGetOperation[Test2Key, any], compareNil[Test2Key])
-		var regString = &Register[string, any]{}
+		var regString Register[string, any] = &registryComparable[string, string, any]{}
 		runAllKeyValue[string](t, STRING, regString, t.Name(), setGetOperation[string, any], compareNil[string])
 	})
 }
 
 func TestNewRegister(t *testing.T) {
-	t.Run("Empty Register Get operation", func(t *testing.T) {
+	t.Run("Empty registryComparable Get operation", func(t *testing.T) {
 		var regTestKey = NewRegister[*TestKey, any]()
 		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), getOperation[*TestKey, any], compareNil[*TestKey])
 		var regT2 = NewRegister[Test2Key, any]()
@@ -139,7 +140,7 @@ func TestNewRegister(t *testing.T) {
 		var regString = NewRegister[string, any]()
 		runAllKeyValue[string](t, STRING, regString, t.Name(), getOperation[string, any], compareNil[string])
 	})
-	t.Run("Empty Register Set Get operation", func(t *testing.T) {
+	t.Run("Empty registryComparable Set Get operation", func(t *testing.T) {
 		var regTestKey = NewRegister[*TestKey, any]()
 		runAllKeyValue[*TestKey](t, TESTKEY, regTestKey, t.Name(), setGetOperation[*TestKey, any], compareEquals[*TestKey])
 		var regT2 = NewRegister[Test2Key, any]()
@@ -147,7 +148,7 @@ func TestNewRegister(t *testing.T) {
 		var regString = NewRegister[string, any]()
 		runAllKeyValue[string](t, STRING, regString, t.Name(), setGetOperation[string, any], compareEquals[string])
 	})
-	t.Run("Empty Register Nil Key Set Get Operation", func(t *testing.T) {
+	t.Run("Empty registryComparable Nil Key Set Get Operation", func(t *testing.T) {
 		var regTestKey = NewRegister[*TestKey, any]()
 		for _, value := range VALUES {
 			runTest[*TestKey](t, regTestKey, ":*TestKey", NilKey[TESTKEY][0], value, setGetOperation[*TestKey, any], compareNil[*TestKey])
@@ -202,6 +203,13 @@ func TestNewRegister(t *testing.T) {
 }
 
 func TestRegister_Unregister(t *testing.T) {
+	t.Run("Single Unregister with nil key", func(t *testing.T) {
+		var registry = NewRegister[*TestKey, any]()
+		returnValue := registry.Unregister(nil)
+		if returnValue != nil {
+			t.Errorf("Expected no return value actual %#v", returnValue)
+		}
+	})
 	t.Run("Single Unregister operation", func(t *testing.T) {
 		var registry = NewRegister[*TestKey, any]()
 		values := createRandomKeyValues(TESTKEY, registry)
@@ -229,7 +237,6 @@ func TestRegister_Unregister(t *testing.T) {
 				t.Error("Multiple unregister failed for key", key, "Expected Value", nil, "Actual Values", currentValue)
 			}
 		}
-
 	})
 }
 
@@ -293,11 +300,11 @@ func TestRegister_MultiThread(b *testing.T) {
 		}()
 	}
 	waitGroup.Wait()
-	b.Log("Registry updates between Register & get calls happened", registerAndGetCounter, "times and between unregister and get happened", unregisterAndGetCounter, "times")
+	b.Log("Registry updates between registryComparable & get calls happened", registerAndGetCounter, "times and between unregister and get happened", unregisterAndGetCounter, "times")
 
 }
 
-func runAllKeyValue[Key comparable, Value any](t *testing.T, registryType KeyType, registry *Register[Key, Value], testType string, operation operationFunction[Key, Value], compare compareFunction[Key]) {
+func runAllKeyValue[Key comparable, Value any](t *testing.T, registryType KeyType, registry Register[Key, Value], testType string, operation operationFunction[Key, Value], compare compareFunction[Key]) {
 	for _, key := range KEYS[registryType] {
 		for _, value := range VALUES {
 			runTest(t, registry, testType, key, value, operation, compare)
@@ -305,7 +312,7 @@ func runAllKeyValue[Key comparable, Value any](t *testing.T, registryType KeyTyp
 	}
 }
 
-func createRandomKeyValues[Key comparable, Value any](registryType KeyType, registry *Register[Key, Value]) map[Key]Value {
+func createRandomKeyValues[Key comparable, Value any](registryType KeyType, registry Register[Key, Value]) map[Key]Value {
 	numberOfValues := len(VALUES)
 	random := rand.New(rand.NewSource(time.Now().Unix()))
 	var valueSequence = make(map[Key]Value)
@@ -323,7 +330,7 @@ func createRandomKeyValues[Key comparable, Value any](registryType KeyType, regi
 	return valueSequence
 }
 
-func runTest[Key comparable, Value any](t *testing.T, registry *Register[Key, Value], testType string, key testCase, value testCase, operation operationFunction[Key, Value], compare compareFunction[Key]) {
+func runTest[Key comparable, Value any](t *testing.T, registry Register[Key, Value], testType string, key testCase, value testCase, operation operationFunction[Key, Value], compare compareFunction[Key]) {
 	t.Run(testType+":"+key.name+"("+value.name+")", func(t *testing.T) {
 		var nilKey Key
 		if key.value == nilKey {
@@ -354,20 +361,163 @@ func compareNil[Key comparable](key Key, value interface{}, expectedValue interf
 	return nil, false
 }
 
-func getOperation[Key comparable, Value any](registry *Register[Key, Value], key Key, value interface{}) interface{} {
+func getOperation[Key any, Value any](registry Register[Key, Value], key Key, value interface{}) interface{} {
 	return registry.Get(key)
 }
 
-func setGetOperation[Key comparable, Value any](registry *Register[Key, Value], key Key, value Value) interface{} {
+func setGetOperation[Key any, Value any](registry Register[Key, Value], key Key, value Value) interface{} {
 	registry.Register(key, value)
 	return registry.Get(key)
 }
 
-func unregisterOperation[Key comparable, Value any](registry *Register[Key, Value], key Key, value interface{}) interface{} {
+func unregisterOperation[Key any, Value any](registry Register[Key, Value], key Key, value interface{}) interface{} {
 	return registry.Unregister(key)
 }
 
-func unRegisterAndGet[Key comparable, Value any](registry *Register[Key, Value], key Key, value interface{}) interface{} {
+func unRegisterAndGet[Key any, Value any](registry Register[Key, Value], key Key, value interface{}) interface{} {
 	registry.Unregister(key)
 	return registry.Get(key)
+}
+
+func TestNewRegister2(t *testing.T) {
+	t.Run("ValidRegister", func(t *testing.T) {
+		register := NewRegisterWithAnyKey[int, CustomKey[int], any]()
+		val1 := struct{}{}
+		register.Register(testKey, val1)
+		getVal := register.Get(testKey)
+		if getVal != val1 {
+			t.Errorf("Expected %#v Actual %#v", val1, getVal)
+		}
+	})
+	t.Run("ValidRegisterWithNilGet", func(t *testing.T) {
+		register := NewRegisterWithAnyKey[int, CustomKey[int], any]()
+		val2 := struct{ desc string }{desc: "Val2"}
+		register.Register(nil, val2)
+		getVal := register.Get(nil)
+		if getVal != nil {
+			t.Errorf("Expected nil Actual %#v", getVal)
+		}
+	})
+	t.Run("ValidRegisterWithNilUnregister", func(t *testing.T) {
+		register := NewRegisterWithAnyKey[int, CustomKey[int], any]()
+		val2 := struct{ desc string }{desc: "Val2"}
+		register.Register(testKey, val2)
+		getVal := register.Get(testKey)
+		if getVal != val2 {
+			t.Errorf("Expected nil Actual %#v", getVal)
+		}
+		delVal := register.Unregister(nil)
+		if delVal != nil {
+			t.Errorf("Expected nil Actual %#v", delVal)
+		}
+	})
+	t.Run("InvalidRegisterWithNilUnregister", func(t *testing.T) {
+		var aSomeTypeObject someType = &aSomeType{}
+		var aSomeTypeObjectDuplicate someType = &aSomeType{}
+		register := &registryComparable[int, someType, any]{register: map[int]*registrationRecord[any]{}, lock: &sync.RWMutex{}}
+		val1 := struct{ desc string }{desc: "Val1"}
+		register.Register(aSomeTypeObject, val1)
+		val2 := struct{ desc string }{desc: "Val2"}
+		retVal := register.Register(aSomeTypeObjectDuplicate, val2)
+		if retVal != val1 {
+			t.Errorf("Expected %#v Actual %#v", val1, retVal)
+		}
+		getVal := register.Get(aSomeTypeObject)
+		if getVal != val2 {
+			t.Errorf("Expected nil Actual %#v", getVal)
+		}
+		delVal := register.Unregister(aSomeTypeObject)
+		if delVal != val2 {
+			t.Errorf("Expected nil Actual %#v", delVal)
+		}
+	})
+}
+
+type someType interface {
+	someType()
+}
+
+type aSomeType struct{}
+
+func (obj aSomeType) someType()   {}
+func (obj aSomeType) Unique() int { return 1 }
+
+func TestRegistrationRecord_Get(t *testing.T) {
+	t.Run("NilValue", func(t *testing.T) {
+		var regRecord *registrationRecord[any] = nil
+		if regRecord.isInitialized() {
+			t.Error("Expected initialization to return false")
+		}
+		if regRecord.Get() != nil {
+			t.Error("Expected Get to return nil")
+		}
+		if regRecord.Set(struct{}{}) != nil {
+			t.Error("Expected Set to return nil")
+		}
+	})
+	t.Run("defaultValue", func(t *testing.T) {
+		var regRecord *registrationRecord[any] = &registrationRecord[any]{}
+		if regRecord.isInitialized() {
+			t.Error("Expected initialization to return false")
+		}
+		if regRecord.Get() != nil {
+			t.Error("Expected Get to return nil")
+		}
+		if regRecord.Set(struct{}{}) != nil {
+			t.Error("Expected Set to return nil")
+		}
+	})
+}
+
+func TestComparableValueConverter(t *testing.T) {
+	t.Run("ComparableValue", func(t *testing.T) {
+		customKey, err := ComparableValueConverter[int](1)
+		if err != nil {
+			t.Errorf("Expected no error, Actual %#v", err)
+		}
+		if customKey.Unique() != 1 {
+			t.Errorf("Expected 1 actual %#v", customKey.Unique())
+		}
+	})
+	t.Run("CustomKeyValue", func(t *testing.T) {
+		customKey, err := ComparableValueConverter[int](aSomeType{})
+		if err != nil {
+			t.Errorf("Expected no error, Actual %#v", err)
+		}
+		if customKey.Unique() != 1 {
+			t.Errorf("Expected 1 actual %#v", customKey.Unique())
+		}
+	})
+	t.Run("NilValue", func(t *testing.T) {
+		customKey, err := ComparableValueConverter[string](nil)
+		if err == nil {
+			t.Errorf("Expected error, Actual no error")
+		}
+		if customKey != nil {
+			t.Errorf("Expected nil key actual %#v", customKey)
+		}
+	})
+	t.Run("NilInterface", func(t *testing.T) {
+		var nilTestKey CustomKey[int] = &aSomeType{}
+		nilTestKey = nil
+		customKey, err := ComparableValueConverter[string](nilTestKey)
+		if err == nil {
+			t.Errorf("Expected error, Actual no error")
+		}
+		if customKey != nil {
+			t.Errorf("Expected nil key actual %#v", customKey)
+		}
+	})
+	t.Run("UnsupportedValue", func(t *testing.T) {
+		customKey, err := ComparableValueConverter[string](TestKey{keyName: "Key1"})
+		if err == nil {
+			t.Errorf("Expected error, Actual no error")
+		}
+		if _, isErrCode := ErrComparableValueConvertFailed.AsError(err); !isErrCode {
+			t.Errorf("Expected type ErrComparableValueConvertFailed, Actual %#v", err)
+		}
+		if customKey != nil && customKey.Unique() != "Key1" {
+			t.Errorf("Expected nil key actual %#v", customKey)
+		}
+	})
 }

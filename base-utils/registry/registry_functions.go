@@ -3,7 +3,7 @@ package registry
 import "sync"
 import logger "github.com/grinps/go-utils/base-utils/logs"
 
-func (record *registrationRecord[Key, Value]) Get() Value {
+func (record *registrationRecord[Value]) Get() Value {
 	var emptyValue Value
 	if record == nil || !record.isInitialized() {
 		logger.Warn("registrationRecord.Get() was called on nil registration record or not initialized. This should not happen in normal flow of code")
@@ -15,7 +15,7 @@ func (record *registrationRecord[Key, Value]) Get() Value {
 	return record.value
 }
 
-func (record *registrationRecord[Key, Value]) Set(newValue Value) Value {
+func (record *registrationRecord[Value]) Set(newValue Value) Value {
 	var nilValue Value
 	if record == nil || !record.isInitialized() {
 		logger.Warn("registrationRecord.Set() was called on nil registration record or not initialized. This should not happen in normal flow of code.", "newValue", newValue)
@@ -29,18 +29,17 @@ func (record *registrationRecord[Key, Value]) Set(newValue Value) Value {
 	return oldValue
 }
 
-func (record *registrationRecord[Key, Value]) isInitialized() bool {
-	var defaultKeyValue Key
-	if record != nil && record.lock != nil && record.key != defaultKeyValue {
+func (record *registrationRecord[Value]) isInitialized() bool {
+	if record != nil && record.lock != nil && record.valueSet {
 		return true
 	}
 	return false
 }
 
-func (registry *Register[Key, Value]) Get(key Key) Value {
+func (registry *registryComparable[T, Key, Value]) Get(key Key) Value {
 	var value Value
 	if registry == nil {
-		logger.Warn("Register.Get was called on nil register. This should not happen in normal flow of code", "key", key)
+		logger.Warn("registryComparable.Get was called on nil register. This should not happen in normal flow of code", "key", key)
 	} else {
 		regRecord := registry.getRegistrationRecord(key)
 		logger.Log("Found registration record", regRecord)
@@ -53,10 +52,10 @@ func (registry *Register[Key, Value]) Get(key Key) Value {
 	return value
 }
 
-func (registry *Register[Key, Value]) Register(key Key, newValue Value) Value {
+func (registry *registryComparable[T, Key, Value]) Register(key Key, newValue Value) Value {
 	var currentValue Value
 	if registry == nil {
-		logger.Warn("Register.Register was called on nil register. This should not happen in normal flow of code", "key", key, "newValue", newValue)
+		logger.Warn("registryComparable.Register was called on nil register. This should not happen in normal flow of code", "key", key, "newValue", newValue)
 	} else {
 		regRecord := registry.getRegistrationRecord(key)
 		logger.Log("Found registration record", regRecord)
@@ -65,10 +64,10 @@ func (registry *Register[Key, Value]) Register(key Key, newValue Value) Value {
 			currentValue = regRecord.Set(newValue)
 		} else {
 			logger.Log("Creating registration recordInternal for key", key)
-			regRecord := &registrationRecord[Key, Value]{
-				key:   key,
-				value: newValue,
-				lock:  &sync.RWMutex{},
+			regRecord := &registrationRecord[Value]{
+				valueSet: true,
+				value:    newValue,
+				lock:     &sync.RWMutex{},
 			}
 			registry.setRegistrationRecord(key, regRecord)
 		}
@@ -76,78 +75,90 @@ func (registry *Register[Key, Value]) Register(key Key, newValue Value) Value {
 	return currentValue
 }
 
-func (registry *Register[Key, Value]) isInitialized() bool {
+func (registry *registryComparable[T, Key, Value]) isInitialized() bool {
 	if registry != nil && registry.register != nil && registry.lock != nil {
 		return true
 	}
 	return false
 }
 
-func (registry *Register[Key, Value]) getRegistrationRecord(key Key) *registrationRecord[Key, Value] {
+func (registry *registryComparable[T, Key, Value]) getRegistrationRecord(key Key) *registrationRecord[Value] {
 	if registry == nil || !registry.isInitialized() {
-		logger.Warn("Register.getRegistrationRecord was called on nil register or not initialized. This should not happen in normal flow of code", "key", key)
+		logger.Warn("registryComparable.getRegistrationRecord was called on nil register or not initialized. This should not happen in normal flow of code", "key", key)
 		return nil
 	}
-	var record *registrationRecord[Key, Value] = nil
+	var record *registrationRecord[Value] = nil
 	logger.Log("Locking read lock with deferred unlock on entry", registry)
 	registry.lock.RLock()
 	defer deferredRUnlock(registry, registry.lock)
-	var applicableKey interface{} = key
-	if keyAsKey, isCustomKey := applicableKey.(CustomKey); isCustomKey {
-		applicableKey = keyAsKey.Unique()
-	}
-	if recordInternal, ok := registry.register[applicableKey]; ok && recordInternal != nil {
-		record = recordInternal
-		logger.Log("Located existing record on entry", registry)
+	applicableKey, err := ComparableValueConverter[T](key)
+	var nilObject T
+	if err != nil {
+		logger.Log("Failed to convert key", key, "to map key", registry)
+	} else if applicableKeyValue := applicableKey.Unique(); applicableKeyValue != nilObject {
+		if recordInternal, ok := registry.register[applicableKey.Unique()]; ok && recordInternal != nil {
+			record = recordInternal
+			logger.Log("Located existing record on entry", registry)
+		}
+	} else {
+		logger.Log("Key lookup is nil value", nilObject, "for key", key, "on registry", registry)
 	}
 	logger.Log("Returning record", record)
 	return record
 }
 
-func (registry *Register[Key, Value]) setRegistrationRecord(key Key, record *registrationRecord[Key, Value]) *registrationRecord[Key, Value] {
-	var exitingRecord *registrationRecord[Key, Value] = nil
+func (registry *registryComparable[T, Key, Value]) setRegistrationRecord(key Key, record *registrationRecord[Value]) *registrationRecord[Value] {
+	var exitingRecord *registrationRecord[Value] = nil
 	if registry == nil || !registry.isInitialized() {
-		logger.Warn("Register.setRegistrationRecord was called on nil register or not initialized. This should not happen in normal flow of code", "key", key, "record", record)
+		logger.Warn("registryComparable.setRegistrationRecord was called on nil register or not initialized. This should not happen in normal flow of code", "key", key, "record", record)
 	} else {
 		logger.Log("Locking lock on entry", registry)
 		registry.lock.Lock()
 		defer deferredUnlock(registry, registry.lock)
-		var applicableKey interface{} = key
-		if keyAsKey, isCustomKey := applicableKey.(CustomKey); isCustomKey {
-			applicableKey = keyAsKey.Unique()
+		applicableKey, err := ComparableValueConverter[T](key)
+		var nilObject T
+		if err != nil {
+			logger.Log("Failed to convert key", key, "to map key", registry)
+		} else if applicableKeyValue := applicableKey.Unique(); applicableKeyValue != nilObject {
+			if internalCurrentValue, ok := registry.register[applicableKeyValue]; ok {
+				exitingRecord = internalCurrentValue
+				logger.Log("Got current value from register ", registry, " for key ", key, " as ", internalCurrentValue)
+			}
+			registry.register[applicableKeyValue] = record
+		} else {
+			logger.Log("Key lookup is nil value", nilObject, "for key", key, "on registry", registry)
 		}
-		if internalCurrentValue, ok := registry.register[applicableKey]; ok {
-			exitingRecord = internalCurrentValue
-			logger.Log("Got current value from register ", registry, " for key ", key, " as ", internalCurrentValue)
-		}
-		registry.register[applicableKey] = record
 		logger.Log("Set current value in register ", registry, " for key ", key, " as ", record)
 	}
 	return exitingRecord
 }
 
-func (registry *Register[Key, Value]) Unregister(key Key) Value {
+func (registry *registryComparable[T, Key, Value]) Unregister(key Key) Value {
 	var currentEntry Value
 	if registry == nil {
-		logger.Warn("Register.Unregister was called on nil register. This should not happen in normal flow of code", "key", key)
+		logger.Warn("registryComparable.Unregister was called on nil register. This should not happen in normal flow of code", "key", key)
 	} else {
 		logger.Log("Locking lock with deferred unlock on entry", registry)
 		registry.lock.Lock()
 		defer deferredUnlock(registry, registry.lock)
-		var applicableKey interface{} = key
-		if keyAsKey, isCustomKey := applicableKey.(CustomKey); isCustomKey {
-			applicableKey = keyAsKey.Unique()
-		}
-		if currentEntryInMap, ok := registry.register[applicableKey]; ok {
-			logger.Log("Registration record located for key", key, "value", currentEntryInMap)
-			delete(registry.register, applicableKey)
-			logger.Log("Deleted key from map")
-			if currentEntryInMap != nil {
-				currentEntry = currentEntryInMap.Get()
-				logger.Log("Retrieved current value as", currentEntry)
+		applicableKey, err := ComparableValueConverter[T](key)
+		var nilObject T
+		if err != nil {
+			logger.Log("Failed to convert key", key, "to map key", registry)
+		} else if applicableKeyValue := applicableKey.Unique(); applicableKeyValue != nilObject {
+			if currentEntryInMap, ok := registry.register[applicableKeyValue]; ok {
+				logger.Log("Registration record located for key", key, "value", currentEntryInMap)
+				delete(registry.register, applicableKeyValue)
+				logger.Log("Deleted key from map")
+				if currentEntryInMap != nil {
+					currentEntry = currentEntryInMap.Get()
+					logger.Log("Retrieved current value as", currentEntry)
+				}
+			} else {
+				logger.Log("No registration record was located for key", key)
 			}
 		} else {
-			logger.Log("No registration record was located for key", key)
+			logger.Log("Key lookup is nil value", nilObject, "for key", key, "on registry", registry)
 		}
 	}
 	return currentEntry
@@ -164,6 +175,10 @@ func deferredRUnlock(registry interface{}, lock *sync.RWMutex) {
 	lock.RUnlock()
 }
 
-func NewRegister[Key comparable, Value any]() *Register[Key, Value] {
-	return &Register[Key, Value]{register: map[interface{}]*registrationRecord[Key, Value]{}, lock: &sync.RWMutex{}}
+func NewRegister[Key comparable, Value any]() Register[Key, Value] {
+	return &registryComparable[Key, Key, Value]{register: map[Key]*registrationRecord[Value]{}, lock: &sync.RWMutex{}}
+}
+
+func NewRegisterWithAnyKey[C comparable, Key CustomKey[C], Value any]() Register[Key, Value] {
+	return &registryComparable[C, Key, Value]{register: map[C]*registrationRecord[Value]{}, lock: &sync.RWMutex{}}
 }
