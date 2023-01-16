@@ -1,6 +1,9 @@
 package errext
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestNewErrorCodeWithOptions(t *testing.T) {
 	t.Run("EmptyOptions", func(t *testing.T) {
@@ -55,4 +58,40 @@ func TestWithErrorType(t *testing.T) {
 		}
 
 	})
+}
+
+func TestIs(t *testing.T) {
+	errCode := NewErrorCodeWithOptions(WithErrorType("ANewErrType1"), WithErrorCode(10))
+	t.Run("Both", func(t *testing.T) {
+		if !Is(nil, nil) {
+			t.Error("Expecting true actual false")
+		}
+	})
+	t.Run("NilError", func(t *testing.T) {
+		if Is(nil, errCode) {
+			t.Error("Expecting false actual true")
+		}
+	})
+	t.Run("NilErrorCode", func(t *testing.T) {
+		if Is(errors.New("test"), nil) {
+			t.Error("Expecting false actual true")
+		}
+	})
+	t.Run("MismatchingErrCode", func(t *testing.T) {
+		if Is(errors.New("test"), errCode) {
+			t.Error("Expecting false actual true")
+		}
+	})
+	t.Run("MismatchingWithMatchingErrCode", func(t *testing.T) {
+		parentErrCode := NewErrorCode(0)
+		childErr := errCode.NewF("Test")
+		errWithWrapped := parentErrCode.NewWithErrorF(childErr, "test2")
+		if !Is(errWithWrapped, parentErrCode) {
+			t.Error("Expecting true actual false")
+		}
+		if !Is(errWithWrapped, errCode) {
+			t.Error("Expecting true actual false")
+		}
+	})
+
 }

@@ -1,6 +1,9 @@
 package errext
 
-import "sync"
+import (
+	"errors"
+	"sync"
+)
 
 // ErrorCodeOptions specifies function that can be used to customize the ErrorCodeImpl value
 type ErrorCodeOptions func(errorCode *ErrorCodeImpl) *ErrorCodeImpl
@@ -113,4 +116,24 @@ func nextErrorCodeForType(errorCodeType ErrorType) ErrorCodeValue {
 	var nextCodeValue = ErrorCodeValue(int(applicableCodeValue) + 1)
 	errorCodeGenerationTracker[errorCodeType] = nextCodeValue
 	return nextCodeValue
+}
+
+// Is reports whether any error in error's chain matches error code
+//
+// The chain consists of err itself followed by the sequence of errors obtained by
+// repeatedly calling Unwrap.
+//
+// [errext.ErrorCode] method AsError(error) is used to match the given error (or in chain).
+func Is(err error, code ErrorCode) bool {
+	if err == nil && code == nil {
+		return true
+	}
+	if err != nil && code != nil {
+		if _, isErrCode := code.AsError(err); isErrCode {
+			return true
+		} else if wrappedErr := errors.Unwrap(err); wrappedErr != nil {
+			return Is(wrappedErr, code)
+		}
+	}
+	return false
 }
