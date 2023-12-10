@@ -1,0 +1,8 @@
+github.com/grinps/go-utils/base-utils/logs v0.3.0 h1:Rs37GTDXQscWhGHDqmOqLinNhW4sBxFZFnA82FZw6Vk=
+github.com/grinps/go-utils/base-utils/logs v0.3.0/go.mod h1:1v/ZGqjBUQtWGx7UeRhnZ5ZP/xVxMx/ngVtTm7GjPSE=
+github.com/grinps/go-utils/base-utils/registry v0.5.0 h1:BNDZRJ/Q2l41SzAHQf4+B2kNPZ9ciTJeQB4Btd2WQf8=
+github.com/grinps/go-utils/base-utils/registry v0.5.0/go.mod h1:rcfg/MAnU++EZN6x8amC/I04gJMXSvHwslsSe0kJh6s=
+github.com/grinps/go-utils/errext v0.5.0 h1:C88B6eHe1iuCjH43lCE8lQYGjm5i2jx0+NLNQZIY20w=
+github.com/grinps/go-utils/errext v0.5.0/go.mod h1:wmPht+TF7Q1HsmQkWIYP9hHNGM+kBQGrUEtSlrR45Bg=
+github.com/grinps/go-utils/errext v0.6.0 h1:iZQax9t8cemOMUQDh4zEqasdvADISgCMI8nER0BchmU=
+github.com/grinps/go-utils/errext v0.6.0/go.mod h1:KV2N2bgaiwhzRw3ICNetCGYr7gZuhUEEg/27+mMzOFk=
