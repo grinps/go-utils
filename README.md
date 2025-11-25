@@ -395,35 +395,41 @@ source, err := resolver.Resolve(ctx, "file:///path/to/file")
 
 ### 6. Logger Package
 
-**Import:** `github.com/grinps/go-utils/base-utils/logs`
+**Import:** `github.com/grinps/go-utils/logger`
 
-Environment-configurable logging utilities for trace and warning messages.
+A lightweight extension for Go 1.21+ `log/slog` that adds hierarchical method tracing (Markers) and context-aware logger propagation.
 
 #### Features
-- Environment variable configuration
-- Trace logging with enable/disable
-- Warning logging with enable/disable
-- Custom log formats
-- Automatic initialization
+- **Hierarchical Markers**: Track execution paths (e.g., `Service.Repo.Query(id=1)`) automatically.
+- **Context Integration**: Store and retrieve `slog.Logger` from `context.Context`.
+- **Zero-Allocation Tracing**: Optimized, lazy-evaluated markers and conditional trace logging.
+- **Standard Library Compatible**: Fully compatible with `log/slog`.
 
 #### Quick Example
 
 ```go
-import logger "github.com/grinps/go-utils/base-utils/logs"
+import (
+    "context"
+    "github.com/grinps/go-utils/logger"
+)
 
-// Trace logging (enabled via TRACE_LOG_UTIL_ENABLE=1)
-logger.Log("Operation completed", "key", value)
+func ProcessOrder(ctx context.Context, orderID string) {
+    // Auto-logs "Entering ProcessOrder" at Trace level (-8)
+    // Updates ctx with marker "Parent.ProcessOrder(orderID)"
+    ctx = logger.Entering(ctx, "ProcessOrder", "orderID", orderID)
+    defer logger.Exiting(ctx)
 
-// Warning logging (disabled via TRACE_WARN_UTIL_DISABLE=1)
-logger.Warn("Deprecated function", "function", "OldFunc")
+    // Get the logger with the current marker attached
+    log := logger.LoggerFromContext(ctx)
+    log.Info("Validating order...") 
+}
 ```
 
-#### Environment Variables
-
-- `TRACE_LOG_UTIL_ENABLE` - Enable trace logging (1, TRUE, ENABLE)
-- `TRACE_LOG_UTIL_FORMAT` - Custom trace log format
-- `TRACE_WARN_UTIL_DISABLE` - Disable warning logging
-- `TRACE_WARN_UTIL_FORMAT` - Custom warning log format
+#### Key Functions
+- `Entering(ctx, method, args...)`: Starts a span, updates context marker & logger.
+- `Exiting(ctx)`: Logs exit message (if enabled).
+- `LoggerFromContext(ctx)`: Retrieves the scoped `*slog.Logger`.
+- `NewMarker(name)`: Creates a standalone marker.
 
 ---
 
@@ -859,21 +865,6 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 - ✅ **Initial Release** - Generic registry implementation with comparable keys
 
 **Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/base-utils/registry.svg)](https://pkg.go.dev/github.com/grinps/go-utils/base-utils/registry)
-
----
-
-### Logger Package
-
-#### [v0.3.0](https://github.com/grinps/go-utils/releases/tag/base-utils/logs/v0.3.0) (December 2022)
-- 📄 **License** - Added LICENSE file
-
-#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/base-utils/logs/v0.2.0) (January 2022)
-- ✅ **Warn Function** - Added Warn function with associated test cases
-- 🔧 **Migration** - Migrated to logs directory structure
-
-**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/base-utils/logs.svg)](https://pkg.go.dev/github.com/grinps/go-utils/base-utils/logs)
-
----
 
 ### IOUtils Package
 
