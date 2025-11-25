@@ -142,6 +142,7 @@ var defaultErrorCode = &ErrorCodeImpl{
 
 // NewErrorCode returns an implementation of new [errext.ErrorCode] with given errorId and [DefaultErrorCodeType]
 // Refer to [WithErrorCode] for specific validations.
+// This function should be used during package initialization to create new error codes to avoid any memory leaks
 func NewErrorCode(errorId int) ErrorCode {
 	return NewErrorCodeWithOptions(WithErrorCodeAndType(false, errorId, DefaultErrorCodeType))
 }
@@ -149,6 +150,7 @@ func NewErrorCode(errorId int) ErrorCode {
 // NewErrorCodeOfType returns an implementation of new [errext.ErrorCode] for the given errorId and given type.
 //
 // The given errorId and errorCodeType is converted to [errext.ErrorCodeValue] and [errext.ErrorType] respectively.
+// This function should be used during package initialization to create new error codes to avoid any memory leaks
 func NewErrorCodeOfType(errorId int, errorCodeType string) ErrorCode {
 	return NewErrorCodeWithOptions(WithErrorCodeAndType(false, errorId, errorCodeType))
 }
@@ -156,6 +158,7 @@ func NewErrorCodeOfType(errorId int, errorCodeType string) ErrorCode {
 // NewUniqueErrorCode returns a unique version of [errext.ErrorCode] for the given errorId.
 //
 // If an existing errorId has already been created, the same is returned otherwise a new instance is returned.
+// This function should be used during package initialization to create new error codes to avoid any memory leaks
 func NewUniqueErrorCode(errorId int) ErrorCode {
 	return NewErrorCodeWithOptions(WithErrorCodeAndType(true, errorId, DefaultErrorCodeType))
 }
@@ -163,6 +166,7 @@ func NewUniqueErrorCode(errorId int) ErrorCode {
 // NewUniqueErrorCodeOfType returns a unique version of [errext.ErrorCode] for the given errorId and error type
 //
 // If an existing errorId has already been created, the same is returned otherwise a new instance is returned.
+// This function should be used during package initialization to create new error codes to avoid any memory leaks
 func NewUniqueErrorCodeOfType(errorId int, codeType string) ErrorCode {
 	return NewErrorCodeWithOptions(WithErrorCodeAndType(true, errorId, codeType))
 }
