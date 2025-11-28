@@ -2,8 +2,82 @@ package errext
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 )
+
+func TestStackTrace(t *testing.T) {
+	EnableStackTrace = true
+	defer func() { EnableStackTrace = false }()
+
+	t.Run("CaptureAndFormat", func(t *testing.T) {
+		ec := NewErrorCode(100)
+		err := ec.New("stack trace error")
+
+		// Verify stack is captured
+		if asErr, ok := ec.AsError(err); !ok {
+			t.Errorf("Expected Error instance")
+		} else if len(asErr.stack) == 0 {
+			t.Error("Expected stack trace to be captured")
+		}
+
+		// Verify formatting
+		msg := fmt.Sprintf("%+v", err)
+		if !strings.Contains(msg, "stack trace error") {
+			t.Error("Expected error message in formatted output")
+		}
+		// Check for this function name in stack trace
+		// Note: usage of runtime.Callers might vary slightly but TestStackTrace should be present
+		if !strings.Contains(msg, "errext.TestStackTrace") {
+			t.Errorf("Expected stack trace to contain function name, got: %s", msg)
+		}
+	})
+
+	t.Run("Disabled", func(t *testing.T) {
+		EnableStackTrace = false
+		ec := NewErrorCode(101)
+		err := ec.New("no stack trace")
+
+		if asErr, ok := ec.AsError(err); !ok {
+			t.Errorf("Expected Error instance")
+		} else if len(asErr.stack) != 0 {
+			t.Error("Expected NO stack trace when disabled")
+		}
+	})
+}
+
+func TestErrorAs(t *testing.T) {
+	t.Run("MatchErrorCode", func(t *testing.T) {
+		ec := NewErrorCode(50)
+		err := ec.New("some error")
+
+		var targetEC ErrorCode
+		if errors.As(err, &targetEC) {
+			if targetEC != ec {
+				t.Error("Extracted ErrorCode does not match")
+			}
+		} else {
+			t.Error("errors.As failed to match ErrorCode")
+		}
+	})
+
+	t.Run("StandardErrorAs", func(t *testing.T) {
+		ec := NewErrorCode(52)
+
+		myErr := &testError{}
+		errWithMyErr := ec.NewWithError("wrapper", myErr)
+
+		var target *testError
+		if !errors.As(errWithMyErr, &target) {
+			t.Error("errors.As failed to find wrapped error")
+		}
+	})
+}
+
+type testError struct{}
+
+func (e *testError) Error() string { return "test error" }
 
 func TestErrorCodeImpl(t *testing.T) {
 	t.Run("NilInstance", func(t *testing.T) {

@@ -9,7 +9,9 @@
 //     which can be used to write handlers that can provide a common response for invalid input.
 //  4. Error message template - allows specifying pre-defined error template with specific parameters. The parameter values
 //     can be provided while creating errors using [errext.ErrorCode].
-//  5. TODO Stack Capture
+//  5. Stack Capture - Captures stack trace when errors are created. Controlled via [errext.EnableStackTrace] flag (default false).
+//     Use %+v with fmt to print stack traces.
+//  6. Error Matching - Supports [errors.As] for both the error itself and extracting the underlying [errext.ErrorCode].
 //
 // All the above capabilities are available through [errext.ErrorCode] which define an error template that can be used to create
 // errors.

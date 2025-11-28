@@ -3,8 +3,14 @@ package errext
 import (
 	"errors"
 	"fmt"
+	"io"
+	"runtime"
 	"strings"
 )
+
+// EnableStackTrace controls whether stack traces are captured when errors are created.
+// This is disabled by default to avoid performance impact.
+var EnableStackTrace = false
 
 // Error represents an implementation of [error] interface that supports [errext.ErrorCode] and [errors.Unwrap] capability.
 //
@@ -13,6 +19,7 @@ type Error struct {
 	errorCode ErrorCode
 	text      string
 	err       error
+	stack     []uintptr
 }
 
 // Unwrap returns the error associated with this error instance.
@@ -27,6 +34,51 @@ func (wrappedError *Error) Unwrap() error {
 // [error]: https://pkg.go.dev/builtin#error
 func (wrappedError *Error) Error() string {
 	return wrappedError.text
+}
+
+// Format implements the fmt.Formatter interface to support custom printing.
+// It supports %+v to print the error along with its stack trace if available.
+func (wrappedError *Error) Format(s fmt.State, verb rune) {
+	switch verb {
+	case 'v':
+		if s.Flag('+') {
+			io.WriteString(s, wrappedError.text)
+			if wrappedError.err != nil {
+				fmt.Fprintf(s, ": %+v", wrappedError.err)
+			}
+			wrappedError.printStack(s)
+			return
+		}
+		fallthrough
+	case 's':
+		io.WriteString(s, wrappedError.text)
+	case 'q':
+		fmt.Fprintf(s, "%q", wrappedError.text)
+	}
+}
+
+func (wrappedError *Error) printStack(w io.Writer) {
+	if len(wrappedError.stack) > 0 {
+		frames := runtime.CallersFrames(wrappedError.stack)
+		for {
+			frame, more := frames.Next()
+			fmt.Fprintf(w, "\n%+v", frame.Function)
+			fmt.Fprintf(w, "\n\t%s:%d", frame.File, frame.Line)
+			if !more {
+				break
+			}
+		}
+	}
+}
+
+// As implements the interface required by errors.As.
+// It allows matching against the embedded ErrorCode or specific ErrorCode implementations.
+func (wrappedError *Error) As(target any) bool {
+	if targetVal, ok := target.(*ErrorCode); ok {
+		*targetVal = wrappedError.errorCode
+		return true
+	}
+	return false
 }
 
 // ErrorCode defines an interface to create errors based on pre-defined standards and capture specific information needed.
@@ -97,10 +149,18 @@ func (errorCode *ErrorCodeImpl) NewWithError(text string, err error) error {
 	if !errorCode.errorCodeSet {
 		return errors.New(errorCodeNotSetMessage)
 	}
+	var stack []uintptr
+	if EnableStackTrace {
+		const depth = 32
+		var pcs [depth]uintptr
+		n := runtime.Callers(2, pcs[:])
+		stack = pcs[0:n]
+	}
 	return &Error{
 		errorCode: errorCode,
 		text:      text,
 		err:       err,
+		stack:     stack,
 	}
 }
 

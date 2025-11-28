@@ -36,10 +36,7 @@ func (p phraseImpl) String() string {
 }
 
 func (p phraseImpl) Equals(phrase Phrase) bool {
-	if asPhraseImpl, isPhraseImpl := phrase.(Phrase); isPhraseImpl && asPhraseImpl.String() == p.String() {
-		return true
-	}
-	return false
+	return phrase.String() == p.String()
 }
 
 type paramDef = phraseImpl
