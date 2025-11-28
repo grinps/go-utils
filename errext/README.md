@@ -1,11 +1,11 @@
 # errext - Extended Error Handling for Go
 
-`errext` extends standard Go error functionality to support structured error generation, categorization, and templating. It is designed for applications that require strict error codes and machine-readable error types while maintaining idiomatic Go error compatibility.
+`errext` extends standard Go error functionality to support structured error generation, categorization, and contextual attributes. It is designed for applications that require strict error codes and machine-readable error types while maintaining idiomatic Go error compatibility.
 
 ## Features
 
 *   **Error Codes & Types:** Assign integer codes and string types to errors for reliable categorization and comparison.
-*   **Templating:** Define error message templates with placeholders to ensure consistency across your application.
+*   **Structured Attributes:** Add slog-style key-value pairs to errors for structured context and observability.
 *   **Stack Traces:** Optional stack trace capture for debugging, printed via `%+v`.
 *   **Stdlib Compatibility:** Fully implements `error` interface, supports `errors.Is`, `errors.As`, and `errors.Unwrap`.
 *   **Uniqueness Registry:** Prevents duplicate error codes for the same error type.
@@ -90,17 +90,22 @@ if errors.As(err, &ec) {
 }
 ```
 
-### Templating
+### Structured Attributes
 
-Reduce duplication by using templates.
+Add context to errors using key-value pairs.
 
 ```go
-var ErrUserNotFound = errext.NewErrorCode(404).
-    WithOptions(errext.WithTemplate("User [USER_ID] not found"))
+// Default attributes on ErrorCode
+var ErrDatabaseOp = errext.NewErrorCodeWithOptions(
+    errext.WithErrorCode(5001),
+    errext.WithAttributes("component", "database", "severity", "high"),
+)
 
-// Create error with parameter
-err := ErrUserNotFound.NewF("USER_ID", "12345")
-// Error string: "User 12345 not found"
+// Runtime attributes when creating errors
+err := ErrDatabaseOp.New("query failed", "table", "users", "query_time_ms", 1500)
+// Error string: "query failed [component=database severity=high table=users query_time_ms=1500]"
+
+// Attributes are formatted in slog style: [key1=val1 key2=val2]
 ```
 
 ## Performance

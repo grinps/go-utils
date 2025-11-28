@@ -93,9 +93,9 @@ func TestErrorCodeImpl(t *testing.T) {
 		} else if asErr.err != nil {
 			t.Errorf("For test error created, Expected wrapped error to be nil, Actual %#v", asErr.err)
 		}
-		testWithArgErr := nilInstance.NewF("Test1", "test2")
-		if errValue := testWithArgErr.Error(); errValue != "Test1 test2" {
-			t.Error("For test error created, Expected Test1 test2, Actual>", errValue, "<")
+		testWithArgErr := nilInstance.New("Test1", "key", "val")
+		if errValue := testWithArgErr.Error(); errValue != "Test1 [key=val]" {
+			t.Error("For test error created, Expected Test1 [key=val], Actual>", errValue, "<")
 		}
 		if asErr, isErr := defaultErrorCode.AsError(nilErrorTest); !isErr {
 			t.Errorf("For test error created, Expected instance of %#v, Actual %#v", defaultErrorCode, nilErrorTest)
@@ -114,7 +114,7 @@ func TestErrorCodeImpl(t *testing.T) {
 		if asErr, isErr := defaultErrorCode.AsError(nilErrorTest); isErr {
 			t.Errorf("For test error created, Expected not an instance of error %s, Actual %#v", errorCodeNotSetMessage, asErr)
 		}
-		testWithArgErr := nilInstance.NewF("Test1", "test2")
+		testWithArgErr := nilInstance.New("Test1", "key", "val")
 		if errValue := testWithArgErr.Error(); errValue != errorCodeNotSetMessage {
 			t.Errorf("For test error created, Expected %s, Actual %s", errorCodeNotSetMessage, errValue)
 		}
@@ -137,14 +137,14 @@ func TestNewErrorCode(t *testing.T) {
 		if text1Err.Error() != "Text1" {
 			t.Errorf("Expected Text1, Actual %v", text1Err)
 		}
-		textArgsErr := errorCode.NewF("Text1", "Text2")
-		if textArgsErr.Error() != "Text1 Text2" {
-			t.Errorf("Expected Text1 Text2, Actual %v", text1Err)
+		textArgsErr := errorCode.New("Text1", "key", "val")
+		if textArgsErr.Error() != "Text1 [key=val]" {
+			t.Errorf("Expected Text1 [key=val], Actual %v", textArgsErr)
 		}
 		anErr := errors.New("AnErr")
-		textWithErr := errorCode.NewWithErrorF(anErr, "Text2", "Text3")
-		if textWithErr.Error() != "Text2 Text3" {
-			t.Errorf("Expected Text2 Text3, Actual %v", textWithErr)
+		textWithErr := errorCode.NewWithError("Text2", anErr, "key2", "val2")
+		if textWithErr.Error() != "Text2 [key2=val2]" {
+			t.Errorf("Expected Text2 [key2=val2], Actual %v", textWithErr)
 		}
 		if unwrappedErr := errors.Unwrap(textWithErr); unwrappedErr != anErr {
 			t.Errorf("Expected %v, Actual %v", anErr, unwrappedErr)
@@ -165,9 +165,9 @@ func TestNewErrorCode(t *testing.T) {
 		if text1Err.Error() != "Text1" {
 			t.Errorf("Expected Text1, Actual %v", text1Err)
 		}
-		textArgsErr := errorCode.NewF("Text1", "Text2")
-		if textArgsErr.Error() != "Text1 Text2" {
-			t.Errorf("Expected Text1 Text2, Actual %v", text1Err)
+		textArgsErr := errorCode.New("Text1", "key", "val")
+		if textArgsErr.Error() != "Text1 [key=val]" {
+			t.Errorf("Expected Text1 [key=val], Actual %v", textArgsErr)
 		}
 		anErr := errors.New("AnErr")
 		textWithErr := errorCode.NewWithError("Text2", anErr)
@@ -189,9 +189,9 @@ func TestNewErrorCode(t *testing.T) {
 		if text1Err.Error() != "Text1" {
 			t.Errorf("Expected Text1, Actual %v", text1Err)
 		}
-		textArgsErr := errorCode.NewF("Text1", "Text2")
-		if textArgsErr.Error() != "Text1 Text2" {
-			t.Errorf("Expected Text1 Text2, Actual %v", text1Err)
+		textArgsErr := errorCode.New("Text1", "key", "val")
+		if textArgsErr.Error() != "Text1 [key=val]" {
+			t.Errorf("Expected Text1 [key=val], Actual %v", textArgsErr)
 		}
 		anErr := errors.New("AnErr")
 		textWithErr := errorCode.NewWithError("Text2", anErr)
@@ -213,9 +213,9 @@ func TestNewErrorCode(t *testing.T) {
 		if text1Err.Error() != "Text1" {
 			t.Errorf("Expected Text1, Actual %v", text1Err)
 		}
-		textArgsErr := errorCode.NewF("Text1", "Text2")
-		if textArgsErr.Error() != "Text1 Text2" {
-			t.Errorf("Expected Text1 Text2, Actual %v", text1Err)
+		textArgsErr := errorCode.New("Text1", "key", "val")
+		if textArgsErr.Error() != "Text1 [key=val]" {
+			t.Errorf("Expected Text1 [key=val], Actual %v", textArgsErr)
 		}
 		anErr := errors.New("AnErr")
 		textWithErr := errorCode.NewWithError("Text2", anErr)
@@ -237,9 +237,9 @@ func TestNewErrorCode(t *testing.T) {
 		if text1Err.Error() != "Text1" {
 			t.Errorf("Expected Text1, Actual %v", text1Err)
 		}
-		textArgsErr := errorCode.NewF("Text1", "Text2")
-		if textArgsErr.Error() != "Text1 Text2" {
-			t.Errorf("Expected Text1 Text2, Actual %v", text1Err)
+		textArgsErr := errorCode.New("Text1", "key", "val")
+		if textArgsErr.Error() != "Text1 [key=val]" {
+			t.Errorf("Expected Text1 [key=val], Actual %v", textArgsErr)
 		}
 		anErr := errors.New("AnErr")
 		textWithErr := errorCode.NewWithError("Text2", anErr)
@@ -265,9 +265,9 @@ func TestNewErrorCode(t *testing.T) {
 		if text1Err.Error() != "Text1" {
 			t.Errorf("Expected Text1, Actual %v", text1Err)
 		}
-		textArgsErr := errorCode.NewF("Text1", "Text2")
-		if textArgsErr.Error() != "Text1 Text2" {
-			t.Errorf("Expected Text1 Text2, Actual %v", text1Err)
+		textArgsErr := errorCode.New("Text1", "key", "val")
+		if textArgsErr.Error() != "Text1 [key=val]" {
+			t.Errorf("Expected Text1 [key=val], Actual %v", textArgsErr)
 		}
 		anErr := errors.New("AnErr")
 		textWithErr := errorCode.NewWithError("Text2", anErr)
@@ -289,9 +289,9 @@ func TestNewErrorCode(t *testing.T) {
 		if text1Err.Error() != "Text1" {
 			t.Errorf("Expected Text1, Actual %v", text1Err)
 		}
-		textArgsErr := errorCode.NewF("Text1", "Text2")
-		if textArgsErr.Error() != "Text1 Text2" {
-			t.Errorf("Expected Text1 Text2, Actual %v", text1Err)
+		textArgsErr := errorCode.New("Text1", "key", "val")
+		if textArgsErr.Error() != "Text1 [key=val]" {
+			t.Errorf("Expected Text1 [key=val], Actual %v", textArgsErr)
 		}
 		anErr := errors.New("AnErr")
 		textWithErr := errorCode.NewWithError("Text2", anErr)
@@ -311,7 +311,7 @@ func TestNewErrorCodeOfType(t *testing.T) {
 			t.Error("Expected an error code, but nil was returned.")
 		} else {
 			someErr := errors.New("AnError")
-			anErr := errCode.NewWithErrorF(someErr, "Test1", "Test2")
+			anErr := errCode.NewWithError("Test1", someErr, "key", "val")
 			if anErr == nil {
 				t.Error("Expected error object to be created, actual nil")
 			} else if _, isErr := errCode.AsError(anErr); !isErr {
@@ -325,7 +325,7 @@ func TestNewErrorCodeOfType(t *testing.T) {
 			t.Error("Expected an error code, but nil was returned.")
 		} else {
 			someErr := errors.New("AnError")
-			anErr := errCode.NewWithErrorF(someErr, "Test1", "Test2")
+			anErr := errCode.NewWithError("Test1", someErr, "key", "val")
 			if anErr == nil {
 				t.Error("Expected error object to be created, actual nil")
 			} else if _, isErr := errCode.AsError(anErr); !isErr {
@@ -339,7 +339,7 @@ func TestNewErrorCodeOfType(t *testing.T) {
 			t.Error("Expected an error code, but nil was returned.")
 		} else {
 			someErr := errors.New("AnError")
-			anErr := errCode.NewWithErrorF(someErr, "Test1", "Test2")
+			anErr := errCode.NewWithError("Test1", someErr, "key", "val")
 			if anErr == nil {
 				t.Error("Expected error object to be created, actual nil")
 			} else if _, isErr := errCode.AsError(anErr); !isErr {

@@ -7,12 +7,12 @@
 //     two different error object, but we can use error code to compare and validate that the error is same.
 //  3. Error type - A way to classify errors for comparison. For example different errors can be marked as input value error type
 //     which can be used to write handlers that can provide a common response for invalid input.
-//  4. Error message template - allows specifying pre-defined error template with specific parameters. The parameter values
-//     can be provided while creating errors using [errext.ErrorCode].
+//  4. Structured Attributes - Supports slog-style key-value pairs for structured error context. Attributes can be defined
+//     at ErrorCode creation (default attributes) or provided when creating individual errors.
 //  5. Stack Capture - Captures stack trace when errors are created. Controlled via [errext.EnableStackTrace] flag (default false).
 //     Use %+v with fmt to print stack traces.
 //  6. Error Matching - Supports [errors.As] for both the error itself and extracting the underlying [errext.ErrorCode].
 //
-// All the above capabilities are available through [errext.ErrorCode] which define an error template that can be used to create
-// errors.
+// All the above capabilities are available through [errext.ErrorCode] which defines an error factory that can be used to create
+// structured errors with consistent codes, types, and attributes.
 package errext

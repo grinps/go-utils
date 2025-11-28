@@ -84,8 +84,8 @@ func TestIs(t *testing.T) {
 	})
 	t.Run("MismatchingWithMatchingErrCode", func(t *testing.T) {
 		parentErrCode := NewErrorCode(0)
-		childErr := errCode.NewF("Test")
-		errWithWrapped := parentErrCode.NewWithErrorF(childErr, "test2")
+		childErr := errCode.New("Test")
+		errWithWrapped := parentErrCode.NewWithError("test2", childErr)
 		if !Is(errWithWrapped, parentErrCode) {
 			t.Error("Expecting true actual false")
 		}

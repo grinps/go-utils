@@ -71,9 +71,11 @@ func WithUniqueCodeAndType(unique bool, errorCode ErrorCodeValue, errorType Erro
 	if errorCode == ErrorCodeNotSet {
 		applicableErrorCode = nextErrorCodeForType(applicableErrorType)
 	} else if errorCode >= ErrorCodeValueStartValueForGeneration {
-		panic(ErrCodeInvalidErrorCode.NewF("Error code ", errorCode, " which is part of generated range can not be set for type", errorType, ". Please set value below ", ErrorCodeValueStartValueForGeneration))
+		panic(ErrCodeInvalidErrorCode.New("Error code which is part of generated range can not be set for type. Please set value below limit",
+			"code", errorCode, "type", errorType, "limit", ErrorCodeValueStartValueForGeneration))
 	} else if errorCode < 0 {
-		panic(ErrCodeInvalidErrorCode.NewF("Error code ", errorCode, " can not be set < 0. Please set value between 0 and ", ErrorCodeValueStartValueForGeneration))
+		panic(ErrCodeInvalidErrorCode.New("Error code can not be set < 0. Please set value between 0 and limit",
+			"code", errorCode, "limit", ErrorCodeValueStartValueForGeneration))
 	}
 	return func(errorCodeImpl *ErrorCodeImpl) *ErrorCodeImpl {
 		applicableErrorCodeImpl := errorCodeImpl

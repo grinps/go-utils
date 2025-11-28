@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"runtime"
-	"strings"
 )
 
 // EnableStackTrace controls whether stack traces are captured when errors are created.
@@ -19,6 +18,7 @@ type Error struct {
 	errorCode ErrorCode
 	text      string
 	err       error
+	args      []interface{}
 	stack     []uintptr
 }
 
@@ -33,7 +33,11 @@ func (wrappedError *Error) Unwrap() error {
 //
 // [error]: https://pkg.go.dev/builtin#error
 func (wrappedError *Error) Error() string {
-	return wrappedError.text
+	msg := wrappedError.text
+	if len(wrappedError.args) > 0 {
+		msg += " " + formatAttributes(wrappedError.args)
+	}
+	return msg
 }
 
 // Format implements the fmt.Formatter interface to support custom printing.
@@ -42,7 +46,7 @@ func (wrappedError *Error) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':
 		if s.Flag('+') {
-			io.WriteString(s, wrappedError.text)
+			io.WriteString(s, wrappedError.Error())
 			if wrappedError.err != nil {
 				fmt.Fprintf(s, ": %+v", wrappedError.err)
 			}
@@ -51,9 +55,9 @@ func (wrappedError *Error) Format(s fmt.State, verb rune) {
 		}
 		fallthrough
 	case 's':
-		io.WriteString(s, wrappedError.text)
+		io.WriteString(s, wrappedError.Error())
 	case 'q':
-		fmt.Fprintf(s, "%q", wrappedError.text)
+		fmt.Fprintf(s, "%q", wrappedError.Error())
 	}
 }
 
@@ -82,20 +86,14 @@ func (wrappedError *Error) As(target any) bool {
 }
 
 // ErrorCode defines an interface to create errors based on pre-defined standards and capture specific information needed.
-// For example in case a set of invalid input errors need to be created, a standard [errext.ErrorCode] can be defined and then
-// on detection of error, specific parameter values can be provided to create the actual error and return. This error can then
-// be used by calling function to verify whether Error is of type Input Validation ( [errext.ErrorCodeImpl.AsError] ) or validate the parameter
-// responsible for error.
 type ErrorCode interface {
-	// New returns an instance of error created using the passed text.
-	New(text string) error
-	// NewF creates an error string using provided phrases by concatenating them similar to [fmt.Sprintln].
-	NewF(arguments ...interface{}) error
-	// NewWithError create a wrapped error with the given string as error detail.
+	// New returns an instance of error created using the passed text and optional key-value attributes.
+	New(text string, args ...interface{}) error
+
+	// NewWithError create a wrapped error with the given string as error detail and optional key-value attributes.
 	// Various methods like [errors.Unwrap] can be used in the created error object.
-	NewWithError(text string, err error) error
-	// NewWithErrorF creates a wrapped error using the given phrases.
-	NewWithErrorF(err error, arguments ...interface{}) error
+	NewWithError(text string, err error, args ...interface{}) error
+
 	// AsError returns whether the given err is an instance of [Error] and the value as [Error]
 	// If given object is not an instance nil is returned.
 	AsError(err error) (*Error, bool)
@@ -125,30 +123,32 @@ type ErrorCodeImpl struct {
 	errorCode     ErrorCodeValue // ErrorCodeValue associated with this [errext.ErrorCode]
 	errorCodeSet  bool           // Whether ErrorCodeValue has been set or not
 	errorCodeType ErrorType      //Type of error.
-	template      *errTemplate   // Template to create new errors using parameters
+	defaultArgs   []interface{}  // Default attributes
 }
 
 // New returns instance of error using given error string.
-// Refer to [errext.ErrorCodeImpl.NewF] for additional details.
-func (errorCode *ErrorCodeImpl) New(text string) error {
-	return errorCode.NewWithError(text, nil)
-}
-
-// NewF returns instance of error by using the given arguments.
-func (errorCode *ErrorCodeImpl) NewF(arguments ...interface{}) error {
-	return errorCode.NewWithErrorF(nil, arguments...)
+func (errorCode *ErrorCodeImpl) New(text string, args ...interface{}) error {
+	return errorCode.NewWithError(text, nil, args...)
 }
 
 const errorCodeNotSetMessage = "error code has not been set. Please use function NewErrorCode(int) to create new ErrorCode"
 
 // NewWithError returns instance of error by using the given error string and causing err.
-func (errorCode *ErrorCodeImpl) NewWithError(text string, err error) error {
+func (errorCode *ErrorCodeImpl) NewWithError(text string, err error, args ...interface{}) error {
 	if errorCode == nil {
-		return defaultErrorCode.NewWithError(text, err)
+		return defaultErrorCode.NewWithError(text, err, args...)
 	}
 	if !errorCode.errorCodeSet {
 		return errors.New(errorCodeNotSetMessage)
 	}
+
+	var allArgs []interface{}
+	if len(errorCode.defaultArgs) > 0 || len(args) > 0 {
+		allArgs = make([]interface{}, 0, len(errorCode.defaultArgs)+len(args))
+		allArgs = append(allArgs, errorCode.defaultArgs...)
+		allArgs = append(allArgs, args...)
+	}
+
 	var stack []uintptr
 	if EnableStackTrace {
 		const depth = 32
@@ -160,16 +160,8 @@ func (errorCode *ErrorCodeImpl) NewWithError(text string, err error) error {
 		errorCode: errorCode,
 		text:      text,
 		err:       err,
+		args:      allArgs,
 		stack:     stack,
-	}
-}
-
-// NewWithErrorF returns instance of error by using the given arguments and causing err.
-func (errorCode *ErrorCodeImpl) NewWithErrorF(err error, arguments ...interface{}) error {
-	if errorCode != nil {
-		return errorCode.NewWithError(printArguments(generateFromTemplate(errorCode.template, arguments...)...), err)
-	} else {
-		return errorCode.NewWithError(printArguments(arguments...), err)
 	}
 }
 
@@ -185,13 +177,6 @@ func (errorCode *ErrorCodeImpl) AsError(err error) (*Error, bool) {
 		}
 	}
 	return nil, false
-}
-
-func printArguments(args ...interface{}) (returnValue string) {
-	returnValue = "Error message could not be generated."
-	printValue := fmt.Sprintln(args...)
-	returnValue = strings.Trim(printValue, "\n")
-	return
 }
 
 var defaultErrorCode = &ErrorCodeImpl{
