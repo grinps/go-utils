@@ -487,11 +487,11 @@ type StringSecure interface {
 
 **Import:** `github.com/grinps/go-utils/errext`
 
-Extended error handling with error codes, types, and templating.
+Extended error handling with error codes, types, and structured attributes.
 
 #### Features
 - **Error Codes & Types** - Assign integer codes and string types to errors
-- **Templating** - Define error message templates with placeholders
+- **Structured Attributes** - Add slog-style key-value pairs for error context
 - **Stack Traces** - Optional stack trace capture for debugging
 - **Stdlib Compatibility** - Fully implements `error`, `errors.Is`, `errors.As`, `errors.Unwrap`
 - **Panic Recovery** - Utilities to safely handle panics
@@ -937,10 +937,10 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 
 ### Errext Package
 
-#### Current (November 2025)
+#### [v0.8.0](https://github.com/grinps/go-utils/releases/tag/errext/v0.8.0)
 - ✅ **Initial Release** - Structured error handling
 - ✅ **Error Codes & Types** - Integer codes and string categorization
-- ✅ **Templating** - Message templates with parameters
+- ✅ **Structured Attributes** - slog-style key-value pairs for error context
 - ✅ **Stack Traces** - Optional stack capture
 - ✅ **Stdlib Compatibility** - `errors.Is` and `errors.As` support
 
