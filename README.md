@@ -14,6 +14,7 @@ The `base-utils` library provides a set of well-tested, production-ready utiliti
 - **Type Utilities** - Comparison, equality, and string handling interfaces
 - **Generic Registry** - Type-safe registry with comparable keys
 - **Extended Error Handling** - Structured error generation, categorization, and templating
+- **Configuration Management** - Flexible, context-aware configuration management
 
 ## Installation
 
@@ -520,6 +521,45 @@ func init() {
 
 ---
 
+### 9. Config Package
+
+**Import:** `github.com/grinps/go-utils/config`
+
+A flexible, context-aware configuration management library supporting nested maps and type-safe retrieval.
+
+#### Features
+- **Context Aware**: All configuration operations accept `context.Context`.
+- **Type-Safe Retrieval**: Generic `GetValueE[T]` function with compile-time type safety.
+- **Pointer-Based Assignment**: Values are assigned via pointers, enabling default value patterns.
+- **Dot-Notation Keys**: Access nested values using dot notation (e.g., `server.port`).
+- **Simple In-Memory Implementation**: Includes `SimpleConfig` for easy testing and mocking.
+- **Structured Error Handling**: Uses `errext` package for rich error information.
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/config"
+    "log"
+)
+
+func main() {
+    data := map[string]any{
+        "server": map[string]any{"port": 8080},
+    }
+    cfg := config.NewSimpleConfig(context.Background(), config.WithConfigurationMap(data))
+    var port int
+    err := config.GetValueE(context.Background(), "server.port", &port)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println(port)
+}
+```
+
+---
+
 ## Testing
 
 All packages include comprehensive test coverage:
@@ -814,6 +854,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | **logs** | Logging utilities | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/base-utils/logs.svg)](https://pkg.go.dev/github.com/grinps/go-utils/base-utils/logs) |
 | **base-utils** | Core utilities | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/base-utils.svg)](https://pkg.go.dev/github.com/grinps/go-utils/base-utils) |
 | **errext** | Extended error handling | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/errext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/errext) |
+| **config** | Configuration management | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config) |
 
 ---
 
@@ -829,6 +870,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | `logs` | Logging | `Log()`, `Warn()` |
 | `base_utils` | Core utilities | `Equality`, `Comparable` |
 | `errext` | Error handling | `ErrorCode`, `Error` |
+| `config` | Configuration | `Config` |
 
 ---
 
@@ -945,6 +987,20 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 - ✅ **Stdlib Compatibility** - `errors.Is` and `errors.As` support
 
 **Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/errext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/errext)
+
+---
+
+### Config Package
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/config/v0.1.0) (November 2025)
+- ✅ **Initial Release** - Flexible, context-aware configuration management
+- ✅ **Context Aware** - All configuration operations accept `context.Context`.
+- ✅ **Type-Safe Retrieval** - Generic `GetValueE[T]` functions.
+- ✅ **Dot-Notation Keys** - Access nested values using dot notation (e.g., `server.port`).
+- ✅ **Simple In-Memory Implementation** - Includes `SimpleConfig` for easy testing and mocking.
+- ✅ **Structured Error Handling** - Uses `errext` package for rich error information.
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config)
 
 ---
 
