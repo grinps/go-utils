@@ -2,84 +2,26 @@ package config
 
 import (
 	"context"
-	"reflect"
 )
 
+// DefaultKeyDelimiter is the default separator used for nested key access.
+// For example, "server.port" accesses config["server"]["port"].
 const DefaultKeyDelimiter = "."
-const EmptyKeyName = "<empty key>"
-const InvalidKeyName = "<invalid key %#v>"
 
-type DriverOption interface {
-	AsOption() DriverOption
-}
-
-type GetOption interface {
-	AsGetOption() GetOption
-}
-
-type Driver[C Config] interface {
-	// Name Must be able to work with nil instance of driver object.
-	Name() string
-	NewConfigMgr(ctx context.Context, opts ...DriverOption) (C, error)
-}
-
-type Key interface {
-	Key() Key
-}
-
-var simpleKeyType = reflect.TypeOf((*SimpleKey)(nil)).Elem()
-
-type SimpleKey interface {
-	Key
-	Name(ctx context.Context) string
-}
-
-var hierarchyKeyType = reflect.TypeOf((*HierarchyKey)(nil)).Elem()
-
-type HierarchyKey interface {
-	Key
-	HasChild(ctx context.Context) bool
-	Child(ctx context.Context) Key
-}
-
-type Resolver[I any, O any, R any] func(ctx context.Context, resolvers []R, input I, previousOutput O) (O, error)
-
-type InitOption[C Config] func(ctx context.Context, mgr C) error
-
-func (opt InitOption[C]) AsOption() DriverOption {
-	return opt
-}
-
-var keyParserType = reflect.TypeOf((*KeyParser)(nil)).Elem()
-
-type KeyParser Resolver[string, []Key, KeyParser]
-
-func (opt KeyParser) AsOption() DriverOption { return opt }
-
-func (opt KeyParser) AsGetOption() GetOption { return opt }
-
-type KeyResolutionDetail [2]string
-
-func (keyDet KeyResolutionDetail) ResolverName() string { return keyDet[0] }
-
-func (keyDet KeyResolutionDetail) ResolveKey() Key { return simpleStringKey(keyDet[1]) }
-
-type KeyNameResolver Resolver[KeyResolutionDetail, []Key, KeyNameResolver]
-
-type ValueRetriever[C Config] func(ctx context.Context, config C, originalKey string, key []Key, previousValue any) (value any, getErr error)
-
-func (opt ValueRetriever[C]) AsOption() DriverOption { return opt }
-
-func (opt ValueRetriever[C]) AsGetOption() GetOption {
-	return opt
-}
-
+// Config defines the interface for configuration management.
+// Implementations should support nested configuration access via dot-notation keys.
 type Config interface {
-	GetValue(ctx context.Context, key string, options ...GetOption) (any, error)
-	GetConfig(ctx context.Context, key string, options ...GetOption) (Config, error)
-}
+	// GetValue retrieves a configuration value by key and stores it in the provided pointer.
+	// Keys can use dot-notation for nested access (e.g., "server.port").
+	// The returnValue parameter must be a non-nil pointer to store the result.
+	// Returns an error if the key is empty, value is not found, or type conversion fails.
+	//
+	// Example:
+	//   var port int
+	//   err := cfg.GetValue(ctx, "server.port", &port)
+	GetValue(ctx context.Context, key string, returnValue any) error
 
-type CommonRegistries interface {
-	RegisterDriver() CommonRegistries
-	RegisterDriverInstance(name string, driver any) CommonRegistries
+	// GetConfig retrieves a nested configuration as a new Config instance.
+	// The value at the key must be convertible to a configuration map.
+	GetConfig(ctx context.Context, key string) (Config, error)
 }

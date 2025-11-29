@@ -2,87 +2,68 @@ package config
 
 import (
 	"context"
-	logger "github.com/grinps/go-utils/base-utils/logs"
 )
 
-var defaultConfig Config = NewConfig[SimpleConfigDriver, SimpleConfig](context.Background(), OptionSimpleConfigWithMap(map[string]any{}))
+var defaultConfig Config = NewSimpleConfig(context.Background())
 
-func init() {
-	logger.Log("Initializing configuration module.")
-}
-
-func GetValue[T any](ctx context.Context, key string, options ...GetOption) T {
-	retValue, _ := GetValueE[T](ctx, key, options...)
-	return retValue
-}
-
-func GetValueP[T any](ctx context.Context, key string, options ...GetOption) T {
-	retValue, err := GetValueE[T](ctx, key, options...)
-	if err != nil {
-		panic(err)
+// GetValueE retrieves a configuration value from the context and stores it in returnValue.
+// If returnValue already contains a value, it acts as the default and is preserved if the key is not found.
+// Returns an error if:
+//   - The returnValue pointer is nil
+//   - The key is empty
+//   - The config is nil
+//   - The value cannot be converted to type T
+//
+// Example:
+//
+//	path := "./logs" // default value
+//	err := config.GetValueE(ctx, "server.log_path", &path)
+//	// path will be "./logs" if key not found, or the configured value if found
+func GetValueE[T any](ctx context.Context, key string, returnValue *T) error {
+	if returnValue == nil {
+		return ErrConfigNilReturnValue.New("nil return value", "key", key)
 	}
-	return retValue
-}
 
-func GetValueE[T any](ctx context.Context, key string, options ...GetOption) (applicableValue T, getValueErr error) {
-	if key != "" {
-		value, valueGetErr := defaultConfig.GetValue(ctx, key, options...)
-		if valueGetErr == nil {
-			var isT bool
-			applicableValue, isT = value.(T)
-			if !isT {
-				getValueErr = ErrWithParameters(ctx, ErrConfigInvalidValueType, defaultConfig, key, value, nil)
-			}
-		} else {
-			getValueErr = valueGetErr
-		}
-	} else {
-		getValueErr = ErrWithParameters(ctx, ErrConfigEmptyKey, defaultConfig, key, applicableValue, nil)
+	if key == "" {
+		return ErrConfigEmptyKey.New("empty key", "key", key)
 	}
-	return applicableValue, getValueErr
-}
 
-func ClassifyOptions[C Config](options ...DriverOption) (sources []InitOption[C], keyGens []KeyParser, getValOpts []ValueRetriever[C]) {
-	for _, option := range options {
-		if option == nil {
-			continue
-		}
-		if asInitOption, isInitOption := option.(InitOption[C]); isInitOption {
-			sources = append(sources, asInitOption)
-		} else if asKeyParser, isKeyParser := option.(KeyParser); isKeyParser {
-			keyGens = append(keyGens, asKeyParser)
-		} else if asValueRetriever, isValueRetriever := option.(ValueRetriever[C]); isValueRetriever {
-			getValOpts = append(getValOpts, asValueRetriever)
-		}
+	applicableConfig := ContextConfig(ctx, true)
+	if applicableConfig == nil {
+		return ErrConfigNilConfig.New("nil config", "key", key)
 	}
-	return
+
+	// Use the Config.GetValue method directly - it now accepts a pointer
+	return applicableConfig.GetValue(ctx, key, returnValue)
 }
 
-func ClassifyGetOptions[C Config](options ...GetOption) (keyGens []KeyParser, getValOpts []ValueRetriever[C]) {
-	for _, option := range options {
-		if option == nil {
-			continue
-		}
-		if asKeyParser, isKeyParser := option.(KeyParser); isKeyParser {
-			keyGens = append(keyGens, asKeyParser)
-		} else if asValueRetriever, isValueRetriever := option.(ValueRetriever[C]); isValueRetriever {
-			getValOpts = append(getValOpts, asValueRetriever)
-		}
-	}
-	return
-}
+type contextConfigType struct{}
 
-type contextConfigType int
+// ContextConfigReference is the key used to store Config in context.Context.
+var ContextConfigReference contextConfigType = contextConfigType{}
 
-const ContextConfigReference contextConfigType = 1
-
+// ContextWithConfig returns a new context with the given Config attached.
+// If ctx is nil, a background context is created automatically.
+//
+// Example:
+//
+//	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+//	ctx = config.ContextWithConfig(ctx, cfg)
 func ContextWithConfig(ctx context.Context, config Config) context.Context {
-	if ctx != nil {
+	if ctx == nil {
 		ctx = context.Background()
 	}
 	return context.WithValue(ctx, ContextConfigReference, config)
 }
 
+// ContextConfig retrieves the Config from the given context.
+// If defaultIfNotAvailable is true and no config is found, returns the default config.
+// If defaultIfNotAvailable is false and no config is found, returns nil.
+//
+// Example:
+//
+//	cfg := config.ContextConfig(ctx, true) // Returns default if not in context
+//	cfg := config.ContextConfig(ctx, false) // Returns nil if not in context
 func ContextConfig(ctx context.Context, defaultIfNotAvailable bool) Config {
 	if ctx != nil {
 		config := ctx.Value(ContextConfigReference)
@@ -97,4 +78,15 @@ func ContextConfig(ctx context.Context, defaultIfNotAvailable bool) Config {
 	} else {
 		return nil
 	}
+}
+
+// Default returns the default Config instance.
+// This is a package-level SimpleConfig that can be used when no custom config is needed.
+//
+// Example:
+//
+//	cfg := config.Default()
+//	val, err := cfg.GetValue(ctx, "key")
+func Default() Config {
+	return defaultConfig
 }
