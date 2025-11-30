@@ -1,0 +1,238 @@
+# Config Ext Package
+
+The `ext` package provides extended configuration interfaces and utilities that build upon the base `config` package.
+
+## Features
+
+- **Context-Based Functions**: `Unmarshal` and `SetValue` extract config from context
+- **ConfigWrapper**: Wraps any `config.Config` to provide consistent `MarshableConfig` and `MutableConfig` capabilities
+- **MutableConfig Interface**: Defines `SetValue` for modifying configuration
+- **MarshableConfig Interface**: Defines `Unmarshal` for struct unmarshalling
+- **Flexible Options**: Customizable unmarshalling behavior via functional options
+- **Type Conversions**: Automatic conversion of strings to durations, slices, and more
+- **High Test Coverage**: >90% test coverage
+
+## Installation
+
+```bash
+go get github.com/grinps/go-utils/config/ext
+```
+
+## Usage
+
+### Context-Based Functions
+
+The primary functions extract config from context using `config.ContextConfig`:
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/config"
+    "github.com/grinps/go-utils/config/ext"
+)
+
+type ServerConfig struct {
+    Host string `config:"host"`
+    Port int    `config:"port"`
+}
+
+func main() {
+    ctx := context.Background()
+    data := map[string]any{
+        "server": map[string]any{
+            "host": "localhost",
+            "port": 8080,
+        },
+    }
+    cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+    
+    // Store config in context
+    ctx = config.ContextWithConfig(ctx, cfg)
+    
+    // Unmarshal extracts config from context
+    var server ServerConfig
+    if err := ext.Unmarshal(ctx, "server", &server); err != nil {
+        log.Fatal(err)
+    }
+    
+    // SetValue extracts config from context
+    if err := ext.SetValue(ctx, "server.port", 9090); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+### Explicit Config Variants
+
+Use `*WithConfig` variants when you need to pass config explicitly:
+
+```go
+// Unmarshal with explicit config
+var server ServerConfig
+err := ext.UnmarshalWithConfig(ctx, cfg, "server", &server)
+
+// SetValue with explicit config
+err := ext.SetValueWithConfig(ctx, cfg, "server.port", 9090)
+```
+
+### ConfigWrapper
+
+The `ConfigWrapper` wraps any `config.Config` and provides consistent access to `MarshableConfig` and `MutableConfig` capabilities with mapstructure fallback:
+
+```go
+cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+
+// Wrap the config
+wrapper := ext.NewConfigWrapper(cfg)
+
+// Use Unmarshal consistently (uses mapstructure if MarshableConfig not implemented)
+var server ServerConfig
+if err := wrapper.Unmarshal(ctx, "server", &server); err != nil {
+    log.Fatal(err)
+}
+
+// Check capabilities
+if wrapper.IsMutable() {
+    wrapper.SetValue(ctx, "server.port", 9090)
+}
+
+// Access underlying config
+original := wrapper.Unwrap()
+```
+
+### Using Different Struct Tags
+
+```go
+// Use JSON tags
+type Config struct {
+    Host string `json:"host"`
+    Port int    `json:"port"`
+}
+
+var cfg Config
+err := ext.Unmarshal(ctx, "server", &cfg, ext.WithJSONTag())
+
+// Or use mapstructure tags (viper-style)
+err := ext.Unmarshal(ctx, "server", &cfg, ext.WithMapstructureTag())
+
+// Or use YAML tags
+err := ext.Unmarshal(ctx, "server", &cfg, ext.WithYAMLTag())
+
+// Or specify any tag name
+err := ext.Unmarshal(ctx, "server", &cfg, ext.WithTagName("custom"))
+```
+
+### Strict Mode
+
+```go
+// Error if config has unused keys or struct has unset fields
+err := ext.Unmarshal(ctx, "server", &server, ext.WithStrictMode())
+```
+
+### Custom Decode Hooks
+
+```go
+import "github.com/go-viper/mapstructure/v2"
+
+// Custom hook to parse custom types
+hook := func(from reflect.Type, to reflect.Type, data any) (any, error) {
+    if to == reflect.TypeOf(MyCustomType{}) {
+        // Custom conversion logic
+        return parseMyCustomType(data)
+    }
+    return data, nil
+}
+
+err := ext.Unmarshal(ctx, "server", &server, ext.WithDecodeHook(hook))
+```
+
+### Convenience Functions
+
+```go
+// Panic on failure (for initialization code)
+var server ServerConfig
+ext.MustUnmarshal(ctx, "server", &server)
+```
+
+## Interfaces
+
+### MutableConfig
+
+Defines the ability to set configuration values:
+
+```go
+type MutableConfig interface {
+    SetValue(ctx context.Context, key string, newValue any) error
+}
+```
+
+### MarshableConfig
+
+Provides struct unmarshalling capabilities:
+
+```go
+type MarshableConfig interface {
+    Unmarshal(ctx context.Context, key string, target any, options ...UnmarshalOption) error
+}
+```
+
+### ConfigWrapper
+
+Wraps any `config.Config` and implements both interfaces:
+
+```go
+type ConfigWrapper struct {
+    // ...
+}
+
+// Implements config.Config
+func (w *ConfigWrapper) GetValue(ctx, key, returnValue) error
+func (w *ConfigWrapper) GetConfig(ctx, key) (config.Config, error)
+
+// Implements MarshableConfig (uses mapstructure fallback if needed)
+func (w *ConfigWrapper) Unmarshal(ctx, key, target, options...) error
+
+// Implements MutableConfig (returns error if wrapped config doesn't support it)
+func (w *ConfigWrapper) SetValue(ctx, key, newValue) error
+
+// Utility methods
+func (w *ConfigWrapper) Unwrap() config.Config
+func (w *ConfigWrapper) IsMutable() bool
+func (w *ConfigWrapper) IsMarshable() bool
+func (w *ConfigWrapper) All(ctx) map[string]any
+```
+
+## Options Reference
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `WithTagName(name)` | Struct tag for field mapping | `"config"` |
+| `WithJSONTag()` | Use `json` struct tag | - |
+| `WithYAMLTag()` | Use `yaml` struct tag | - |
+| `WithMapstructureTag()` | Use `mapstructure` struct tag | - |
+| `WithWeaklyTypedInput(bool)` | Enable weak type conversions | `true` |
+| `WithSquash(bool)` | Enable embedded struct flattening | `true` |
+| `WithErrorUnused(bool)` | Error on unused config keys | `false` |
+| `WithErrorUnset(bool)` | Error on unset struct fields | `false` |
+| `WithStrictMode()` | Enable both unused and unset errors | - |
+| `WithDecodeHook(hook)` | Add custom decode hook | - |
+| `WithMetadata(*Metadata)` | Store decode metadata | - |
+
+## Default Type Conversions
+
+The following conversions are enabled by default:
+
+- **String to Duration**: `"30s"` → `30 * time.Second`
+- **String to Slice**: `"a,b,c"` → `[]string{"a", "b", "c"}`
+- **Weak typing** (when enabled): `"8080"` → `8080`
+
+## Testing
+
+```bash
+cd config/ext
+go test -v ./...
+```
+
+## License
+
+Part of the go-utils project.
