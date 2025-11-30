@@ -14,7 +14,7 @@ The `base-utils` library provides a set of well-tested, production-ready utiliti
 - **Type Utilities** - Comparison, equality, and string handling interfaces
 - **Generic Registry** - Type-safe registry with comparable keys
 - **Extended Error Handling** - Structured error generation, categorization, and templating
-- **Configuration Management** - Flexible, context-aware configuration management
+- **Configuration Management** - Flexible, context-aware configuration management and extensions like Struct unmarshalling, mutable configs, and context-based config discovery
 
 ## Installation
 
@@ -560,6 +560,82 @@ func main() {
 
 ---
 
+### 10. Config Ext Package
+
+**Import:** `github.com/grinps/go-utils/config/ext`
+
+Extended configuration interfaces and utilities that build upon the base `config` package with context-based config discovery.
+
+#### Features
+- **Context-Based Functions**: `Unmarshal` and `SetValue` extract config from context automatically.
+- **ConfigWrapper**: Wraps any `config.Config` to provide `MarshableConfig` and `MutableConfig` capabilities with mapstructure fallback.
+- **MutableConfig Interface**: Defines `SetValue` for modifying configuration.
+- **MarshableConfig Interface**: Defines `Unmarshal` for struct unmarshalling.
+- **Flexible Options**: Customizable unmarshalling via functional options (tag names, strict mode, decode hooks).
+- **Type Conversions**: Automatic string-to-duration, string-to-slice, and weak type conversions.
+- **High Test Coverage**: >96% test coverage.
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/config"
+    "github.com/grinps/go-utils/config/ext"
+)
+
+type ServerConfig struct {
+    Host string `config:"host"`
+    Port int    `config:"port"`
+}
+
+func main() {
+    ctx := context.Background()
+    data := map[string]any{
+        "server": map[string]any{"host": "localhost", "port": 8080},
+    }
+    cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+    
+    // Store config in context
+    ctx = config.ContextWithConfig(ctx, cfg)
+    
+    // Unmarshal extracts config from context
+    var server ServerConfig
+    if err := ext.Unmarshal(ctx, "server", &server); err != nil {
+        log.Fatal(err)
+    }
+    
+    // SetValue extracts config from context
+    if err := ext.SetValue(ctx, "server.port", 9090); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+#### Using ConfigWrapper for Mapstructure Fallback
+
+```go
+// Wrap any config to get consistent unmarshalling
+wrapper := ext.NewConfigWrapper(cfg)
+
+var server ServerConfig
+err := wrapper.Unmarshal(ctx, "server", &server)
+
+// Check capabilities
+if wrapper.IsMutable() {
+    wrapper.SetValue(ctx, "server.port", 9090)
+}
+```
+
+#### Key Functions
+- `Unmarshal(ctx, key, target, opts...)` - Extracts config from context, delegates to `MarshableConfig`
+- `UnmarshalWithConfig(ctx, cfg, key, target, opts...)` - Uses explicit config
+- `SetValue(ctx, key, value)` - Extracts config from context, requires `MutableConfig`
+- `SetValueWithConfig(ctx, cfg, key, value)` - Uses explicit config
+- `NewConfigWrapper(cfg)` - Wraps config with mapstructure fallback
+
+---
+
 ## Testing
 
 All packages include comprehensive test coverage:
@@ -855,6 +931,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | **base-utils** | Core utilities | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/base-utils.svg)](https://pkg.go.dev/github.com/grinps/go-utils/base-utils) |
 | **errext** | Extended error handling | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/errext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/errext) |
 | **config** | Configuration management | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config) |
+| **config/ext** | Config extensions (Unmarshal, SetValue, ConfigWrapper) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/ext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/ext) |
 
 ---
 
@@ -871,6 +948,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | `base_utils` | Core utilities | `Equality`, `Comparable` |
 | `errext` | Error handling | `ErrorCode`, `Error` |
 | `config` | Configuration | `Config` |
+| `config/ext` | Config extensions | `MutableConfig`, `MarshableConfig`, `ConfigWrapper` |
 
 ---
 
@@ -1001,6 +1079,22 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 - ✅ **Structured Error Handling** - Uses `errext` package for rich error information.
 
 **Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config)
+
+---
+
+### Config Ext Package
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/config/ext/v0.1.0) (November 2025)
+- ✅ **Context-Based Functions** - `Unmarshal` and `SetValue` extract config from context automatically
+- ✅ **ConfigWrapper** - Wraps any `config.Config` with `MarshableConfig` and `MutableConfig` capabilities
+- ✅ **MutableConfig Interface** - Defines `SetValue` for modifying configuration
+- ✅ **MarshableConfig Interface** - Defines `Unmarshal` for struct unmarshalling
+- ✅ **Flexible Unmarshal Options** - Tag names (`json`, `yaml`, `mapstructure`), strict mode, decode hooks
+- ✅ **Mapstructure Fallback** - `ConfigWrapper` provides mapstructure-based unmarshalling for any config
+- ✅ **Type Conversions** - String-to-duration, string-to-slice, weak type conversions
+- ✅ **High Test Coverage** - >96% test coverage
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/ext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/ext)
 
 ---
 
