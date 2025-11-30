@@ -135,7 +135,7 @@ func (m *mockMarshableConfig) GetConfig(ctx context.Context, key string) (config
 	return nil, config.ErrConfigInvalidValue.New("not a map", "key", key)
 }
 
-func (m *mockMarshableConfig) Unmarshal(ctx context.Context, key string, target any, options ...ext.UnmarshalOption) error {
+func (m *mockMarshableConfig) Unmarshal(ctx context.Context, key string, target any, options ...any) error {
 	m.unmarshalCalls++
 	// Simplified implementation - just check it's called
 	return nil

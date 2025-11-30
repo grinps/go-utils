@@ -115,7 +115,7 @@ func (w *ConfigWrapper) GetConfig(ctx context.Context, key string) (config.Confi
 //	}
 //	var server ServerConfig
 //	err := wrapper.Unmarshal(ctx, "server", &server)
-func (w *ConfigWrapper) Unmarshal(ctx context.Context, key string, target any, options ...UnmarshalOption) error {
+func (w *ConfigWrapper) Unmarshal(ctx context.Context, key string, target any, options ...any) error {
 	if w == nil || w.wrapped == nil {
 		return ErrExtNilConfig.New("wrapper or wrapped config is nil", "key", key)
 	}
@@ -206,7 +206,7 @@ func (w *ConfigWrapper) All(ctx context.Context) map[string]any {
 
 // unmarshalAny is a non-generic version of unmarshalWithMapstructure
 // that works with any pointer type. Used by ConfigWrapper.Unmarshal.
-func unmarshalAny(ctx context.Context, cfg config.Config, key string, target any, options ...UnmarshalOption) error {
+func unmarshalAny(ctx context.Context, cfg config.Config, key string, target any, options ...any) error {
 	// Get the configuration value as a map
 	var configMap map[string]any
 
@@ -263,11 +263,13 @@ func unmarshalAny(ctx context.Context, cfg config.Config, key string, target any
 
 // decodeWithMapstructure decodes a map into the target struct using mapstructure.
 // This is a shared helper used by both unmarshalWithMapstructure and unmarshalAny.
-func decodeWithMapstructure(configMap map[string]any, target any, options ...UnmarshalOption) error {
-	// Apply options
+func decodeWithMapstructure(configMap map[string]any, target any, options ...any) error {
+	// Apply options - only process UnmarshalOption types
 	unmarshalCfg := defaultUnmarshalConfig()
 	for _, opt := range options {
-		opt(unmarshalCfg)
+		if fn, ok := opt.(UnmarshalOption); ok {
+			fn(unmarshalCfg)
+		}
 	}
 
 	// Build mapstructure decoder config

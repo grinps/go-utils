@@ -57,7 +57,7 @@ func (m *testMarshableConfig) GetConfig(ctx context.Context, key string) (config
 	return nil, config.ErrConfigInvalidValue.New("not a map", "key", key)
 }
 
-func (m *testMarshableConfig) Unmarshal(ctx context.Context, key string, target any, options ...ext.UnmarshalOption) error {
+func (m *testMarshableConfig) Unmarshal(ctx context.Context, key string, target any, options ...any) error {
 	m.unmarshalCalls++
 	if m.unmarshalErr != nil {
 		return m.unmarshalErr

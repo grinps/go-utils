@@ -34,7 +34,7 @@ type MarshableConfig interface {
 	// Unmarshal unmarshals the configuration at the given key into the target struct.
 	// If key is empty, the entire configuration is unmarshalled.
 	// The target must be a pointer to a struct.
-	// Options can be provided to customize unmarshalling behavior.
+	// Options are implementation-specific; each implementation defines its own option types.
 	//
 	// Example:
 	//   type ServerConfig struct {
@@ -43,5 +43,5 @@ type MarshableConfig interface {
 	//   }
 	//   var server ServerConfig
 	//   err := cfg.Unmarshal(ctx, "server", &server)
-	Unmarshal(ctx context.Context, key string, target any, options ...UnmarshalOption) error
+	Unmarshal(ctx context.Context, key string, target any, options ...any) error
 }

@@ -29,7 +29,7 @@ import (
 //	err := ext.Unmarshal(ctx, "server", &server,
 //	    ext.WithTagName("json"),
 //	    ext.WithStrictMode())
-func Unmarshal[T any](ctx context.Context, key string, target *T, options ...UnmarshalOption) error {
+func Unmarshal[T any](ctx context.Context, key string, target *T, options ...any) error {
 	cfg := config.ContextConfig(ctx, true)
 	return unmarshalWithConfig(ctx, cfg, key, target, options...)
 }
@@ -49,12 +49,12 @@ func Unmarshal[T any](ctx context.Context, key string, target *T, options ...Unm
 //	}
 //	var server ServerConfig
 //	err := ext.UnmarshalWithConfig(ctx, cfg, "server", &server)
-func UnmarshalWithConfig[T any](ctx context.Context, cfg config.Config, key string, target *T, options ...UnmarshalOption) error {
+func UnmarshalWithConfig[T any](ctx context.Context, cfg config.Config, key string, target *T, options ...any) error {
 	return unmarshalWithConfig(ctx, cfg, key, target, options...)
 }
 
 // unmarshalWithConfig is the internal implementation for unmarshalling.
-func unmarshalWithConfig[T any](ctx context.Context, cfg config.Config, key string, target *T, options ...UnmarshalOption) error {
+func unmarshalWithConfig[T any](ctx context.Context, cfg config.Config, key string, target *T, options ...any) error {
 	if cfg == nil {
 		return ErrExtNilConfig.New("config is nil", "key", key)
 	}
@@ -91,7 +91,7 @@ func unmarshalWithConfig[T any](ctx context.Context, cfg config.Config, key stri
 //	ctx = config.ContextWithConfig(ctx, cfg)
 //	var server ServerConfig
 //	ext.MustUnmarshal(ctx, "server", &server)
-func MustUnmarshal[T any](ctx context.Context, key string, target *T, options ...UnmarshalOption) {
+func MustUnmarshal[T any](ctx context.Context, key string, target *T, options ...any) {
 	if err := Unmarshal(ctx, key, target, options...); err != nil {
 		panic("config: failed to unmarshal " + key + ": " + err.Error())
 	}
