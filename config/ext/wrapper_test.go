@@ -26,18 +26,15 @@ func newMockReadOnlyConfig(data map[string]any) *mockReadOnlyConfig {
 	return &mockReadOnlyConfig{data: data}
 }
 
-func (m *mockReadOnlyConfig) GetValue(ctx context.Context, key string, returnValue any) error {
+func (m *mockReadOnlyConfig) GetValue(ctx context.Context, key string) (any, error) {
 	if key == "" {
-		return config.ErrConfigEmptyKey.New("empty key")
+		return nil, config.ErrConfigEmptyKey.New("empty key")
 	}
 	val, ok := m.data[key]
 	if !ok {
-		return config.ErrConfigMissingValue.New("missing value", "key", key)
+		return nil, config.ErrConfigMissingValue.New("missing value", "key", key)
 	}
-	if rv, ok := returnValue.(*any); ok {
-		*rv = val
-	}
-	return nil
+	return val, nil
 }
 
 func (m *mockReadOnlyConfig) GetConfig(ctx context.Context, key string) (config.Config, error) {
@@ -60,24 +57,15 @@ func newMockMutableConfig(data map[string]any) *mockMutableConfig {
 	return &mockMutableConfig{data: data}
 }
 
-func (m *mockMutableConfig) GetValue(ctx context.Context, key string, returnValue any) error {
+func (m *mockMutableConfig) GetValue(ctx context.Context, key string) (any, error) {
 	if key == "" {
-		return config.ErrConfigEmptyKey.New("empty key")
+		return nil, config.ErrConfigEmptyKey.New("empty key")
 	}
 	val, ok := m.data[key]
 	if !ok {
-		return config.ErrConfigMissingValue.New("missing value", "key", key)
+		return nil, config.ErrConfigMissingValue.New("missing value", "key", key)
 	}
-	// Simple assignment for testing
-	switch rv := returnValue.(type) {
-	case *string:
-		*rv = val.(string)
-	case *int:
-		*rv = val.(int)
-	case *any:
-		*rv = val
-	}
-	return nil
+	return val, nil
 }
 
 func (m *mockMutableConfig) GetConfig(ctx context.Context, key string) (config.Config, error) {
@@ -113,15 +101,12 @@ func newMockMarshableConfig(data map[string]any) *mockMarshableConfig {
 	return &mockMarshableConfig{data: data}
 }
 
-func (m *mockMarshableConfig) GetValue(ctx context.Context, key string, returnValue any) error {
+func (m *mockMarshableConfig) GetValue(ctx context.Context, key string) (any, error) {
 	val, ok := m.data[key]
 	if !ok {
-		return config.ErrConfigMissingValue.New("missing value", "key", key)
+		return nil, config.ErrConfigMissingValue.New("missing value", "key", key)
 	}
-	if rv, ok := returnValue.(*any); ok {
-		*rv = val
-	}
-	return nil
+	return val, nil
 }
 
 func (m *mockMarshableConfig) GetConfig(ctx context.Context, key string) (config.Config, error) {
@@ -194,19 +179,18 @@ func TestConfigWrapper_GetValue(t *testing.T) {
 	wrapper := ext.NewConfigWrapper(cfg)
 
 	t.Run("get existing value", func(t *testing.T) {
-		var host string
-		err := wrapper.GetValue(ctx, "host", &host)
+		val, err := wrapper.GetValue(ctx, "host")
 		if err != nil {
 			t.Fatalf("GetValue failed: %v", err)
 		}
-		if host != "localhost" {
-			t.Errorf("Expected 'localhost', got '%s'", host)
+		host, ok := val.(string)
+		if !ok || host != "localhost" {
+			t.Errorf("Expected 'localhost', got '%v'", val)
 		}
 	})
 
 	t.Run("get missing value", func(t *testing.T) {
-		var val string
-		err := wrapper.GetValue(ctx, "missing", &val)
+		_, err := wrapper.GetValue(ctx, "missing")
 		if err == nil {
 			t.Error("Expected error for missing key")
 		}
@@ -214,8 +198,7 @@ func TestConfigWrapper_GetValue(t *testing.T) {
 
 	t.Run("nil wrapper", func(t *testing.T) {
 		var nilWrapper *ext.ConfigWrapper
-		var val string
-		err := nilWrapper.GetValue(ctx, "key", &val)
+		_, err := nilWrapper.GetValue(ctx, "key")
 		if err == nil {
 			t.Error("Expected error for nil wrapper")
 		}
@@ -243,13 +226,13 @@ func TestConfigWrapper_GetConfig(t *testing.T) {
 		}
 
 		// Sub-config should also be a wrapper
-		var host string
-		err = subCfg.GetValue(ctx, "host", &host)
+		val, err := subCfg.GetValue(ctx, "host")
 		if err != nil {
 			t.Fatalf("GetValue on sub-config failed: %v", err)
 		}
-		if host != "localhost" {
-			t.Errorf("Expected 'localhost', got '%s'", host)
+		host, ok := val.(string)
+		if !ok || host != "localhost" {
+			t.Errorf("Expected 'localhost', got '%v'", val)
 		}
 	})
 
@@ -550,21 +533,15 @@ type mockAllConfigWrapper struct {
 	data map[string]any
 }
 
-func (m *mockAllConfigWrapper) GetValue(ctx context.Context, key string, returnValue any) error {
+func (m *mockAllConfigWrapper) GetValue(ctx context.Context, key string) (any, error) {
 	if key == "" {
-		if rv, ok := returnValue.(*any); ok {
-			*rv = m.data
-			return nil
-		}
+		return m.data, nil
 	}
 	val, ok := m.data[key]
 	if !ok {
-		return config.ErrConfigMissingValue.New("missing value", "key", key)
+		return nil, config.ErrConfigMissingValue.New("missing value", "key", key)
 	}
-	if rv, ok := returnValue.(*any); ok {
-		*rv = val
-	}
-	return nil
+	return val, nil
 }
 
 func (m *mockAllConfigWrapper) GetConfig(ctx context.Context, key string) (config.Config, error) {
@@ -674,18 +651,15 @@ type mockRootErrorConfig struct {
 	data map[string]any
 }
 
-func (m *mockRootErrorConfig) GetValue(ctx context.Context, key string, returnValue any) error {
+func (m *mockRootErrorConfig) GetValue(ctx context.Context, key string) (any, error) {
 	if key == "" {
-		return config.ErrConfigEmptyKey.New("empty key not supported")
+		return nil, config.ErrConfigEmptyKey.New("empty key not supported")
 	}
 	val, ok := m.data[key]
 	if !ok {
-		return config.ErrConfigMissingValue.New("missing value", "key", key)
+		return nil, config.ErrConfigMissingValue.New("missing value", "key", key)
 	}
-	if rv, ok := returnValue.(*any); ok {
-		*rv = val
-	}
-	return nil
+	return val, nil
 }
 
 func (m *mockRootErrorConfig) GetConfig(ctx context.Context, key string) (config.Config, error) {
@@ -717,14 +691,11 @@ func TestConfigWrapper_UnmarshalRootError(t *testing.T) {
 // mockRootNonMapConfig returns non-map value for root
 type mockRootNonMapConfig struct{}
 
-func (m *mockRootNonMapConfig) GetValue(ctx context.Context, key string, returnValue any) error {
+func (m *mockRootNonMapConfig) GetValue(ctx context.Context, key string) (any, error) {
 	if key == "" {
-		if rv, ok := returnValue.(*any); ok {
-			*rv = "not a map" // Return non-map value
-			return nil
-		}
+		return "not a map", nil // Return non-map value
 	}
-	return config.ErrConfigMissingValue.New("missing value", "key", key)
+	return nil, config.ErrConfigMissingValue.New("missing value", "key", key)
 }
 
 func (m *mockRootNonMapConfig) GetConfig(ctx context.Context, key string) (config.Config, error) {
@@ -748,15 +719,12 @@ type mockGetConfigErrorConfig struct {
 	data map[string]any
 }
 
-func (m *mockGetConfigErrorConfig) GetValue(ctx context.Context, key string, returnValue any) error {
+func (m *mockGetConfigErrorConfig) GetValue(ctx context.Context, key string) (any, error) {
 	val, ok := m.data[key]
 	if !ok {
-		return config.ErrConfigMissingValue.New("missing value", "key", key)
+		return nil, config.ErrConfigMissingValue.New("missing value", "key", key)
 	}
-	if rv, ok := returnValue.(*any); ok {
-		*rv = val
-	}
-	return nil
+	return val, nil
 }
 
 func (m *mockGetConfigErrorConfig) GetConfig(ctx context.Context, key string) (config.Config, error) {

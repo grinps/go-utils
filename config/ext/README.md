@@ -1,16 +1,14 @@
 # Config Ext Package
 
-The `ext` package provides extended configuration interfaces and utilities that build upon the base `config` package.
+The `ext` package provides extended configuration utilities that build upon the base `config` package.
 
 ## Features
 
-- **Context-Based Functions**: `Unmarshal` and `SetValue` extract config from context
 - **ConfigWrapper**: Wraps any `config.Config` to provide consistent `MarshableConfig` and `MutableConfig` capabilities
-- **MutableConfig Interface**: Defines `SetValue` for modifying configuration
-- **MarshableConfig Interface**: Defines `Unmarshal` for struct unmarshalling
+- **Mapstructure Fallback**: Automatic fallback to mapstructure for configs that don't natively support unmarshalling
 - **Flexible Options**: Customizable unmarshalling behavior via functional options
 - **Type Conversions**: Automatic conversion of strings to durations, slices, and more
-- **High Test Coverage**: >90% test coverage
+- **High Test Coverage**: >96% test coverage
 
 ## Installation
 
@@ -20,62 +18,7 @@ go get github.com/grinps/go-utils/config/ext
 
 ## Usage
 
-### Context-Based Functions
-
-The primary functions extract config from context using `config.ContextConfig`:
-
-```go
-import (
-    "context"
-    "github.com/grinps/go-utils/config"
-    "github.com/grinps/go-utils/config/ext"
-)
-
-type ServerConfig struct {
-    Host string `config:"host"`
-    Port int    `config:"port"`
-}
-
-func main() {
-    ctx := context.Background()
-    data := map[string]any{
-        "server": map[string]any{
-            "host": "localhost",
-            "port": 8080,
-        },
-    }
-    cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
-    
-    // Store config in context
-    ctx = config.ContextWithConfig(ctx, cfg)
-    
-    // Unmarshal extracts config from context
-    var server ServerConfig
-    if err := ext.Unmarshal(ctx, "server", &server); err != nil {
-        log.Fatal(err)
-    }
-    
-    // SetValue extracts config from context
-    if err := ext.SetValue(ctx, "server.port", 9090); err != nil {
-        log.Fatal(err)
-    }
-}
-```
-
-### Explicit Config Variants
-
-Use `*WithConfig` variants when you need to pass config explicitly:
-
-```go
-// Unmarshal with explicit config
-var server ServerConfig
-err := ext.UnmarshalWithConfig(ctx, cfg, "server", &server)
-
-// SetValue with explicit config
-err := ext.SetValueWithConfig(ctx, cfg, "server.port", 9090)
-```
-
-### ConfigWrapper
+### Basic Usage with ConfigWrapper
 
 The `ConfigWrapper` wraps any `config.Config` and provides consistent access to `MarshableConfig` and `MutableConfig` capabilities with mapstructure fallback:
 
@@ -110,23 +53,23 @@ type Config struct {
 }
 
 var cfg Config
-err := ext.Unmarshal(ctx, "server", &cfg, ext.WithJSONTag())
+err := wrapper.Unmarshal(ctx, "server", &cfg, ext.WithJSONTag())
 
 // Or use mapstructure tags (viper-style)
-err := ext.Unmarshal(ctx, "server", &cfg, ext.WithMapstructureTag())
+err := wrapper.Unmarshal(ctx, "server", &cfg, ext.WithMapstructureTag())
 
 // Or use YAML tags
-err := ext.Unmarshal(ctx, "server", &cfg, ext.WithYAMLTag())
+err := wrapper.Unmarshal(ctx, "server", &cfg, ext.WithYAMLTag())
 
 // Or specify any tag name
-err := ext.Unmarshal(ctx, "server", &cfg, ext.WithTagName("custom"))
+err := wrapper.Unmarshal(ctx, "server", &cfg, ext.WithTagName("custom"))
 ```
 
 ### Strict Mode
 
 ```go
 // Error if config has unused keys or struct has unset fields
-err := ext.Unmarshal(ctx, "server", &server, ext.WithStrictMode())
+err := wrapper.Unmarshal(ctx, "server", &server, ext.WithStrictMode())
 ```
 
 ### Custom Decode Hooks
@@ -143,15 +86,7 @@ hook := func(from reflect.Type, to reflect.Type, data any) (any, error) {
     return data, nil
 }
 
-err := ext.Unmarshal(ctx, "server", &server, ext.WithDecodeHook(hook))
-```
-
-### Convenience Functions
-
-```go
-// Panic on failure (for initialization code)
-var server ServerConfig
-ext.MustUnmarshal(ctx, "server", &server)
+err := wrapper.Unmarshal(ctx, "server", &server, ext.WithDecodeHook(hook))
 ```
 
 ## Interfaces
@@ -186,7 +121,7 @@ type ConfigWrapper struct {
 }
 
 // Implements config.Config
-func (w *ConfigWrapper) GetValue(ctx, key, returnValue) error
+func (w *ConfigWrapper) GetValue(ctx, key) (any, error)
 func (w *ConfigWrapper) GetConfig(ctx, key) (config.Config, error)
 
 // Implements MarshableConfig (uses mapstructure fallback if needed)

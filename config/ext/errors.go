@@ -4,23 +4,24 @@ import (
 	"github.com/grinps/go-utils/errext"
 )
 
+const (
+	ErrorTypeExt = "github.com/grinps/go-utils/config/ext"
+)
+
 // Error codes for the ext package.
 var (
 	// ErrExtUnmarshalFailed indicates unmarshalling to struct failed.
-	ErrExtUnmarshalFailed = errext.NewErrorCode(100)
+	ErrExtUnmarshalFailed = errext.NewErrorCodeOfType(100, ErrorTypeExt)
 
 	// ErrExtInvalidTarget indicates the target is not a valid pointer to struct.
-	ErrExtInvalidTarget = errext.NewErrorCode(101)
+	ErrExtInvalidTarget = errext.NewErrorCodeOfType(101, ErrorTypeExt)
 
 	// ErrExtKeyNotFound indicates the configuration key was not found.
-	ErrExtKeyNotFound = errext.NewErrorCode(102)
+	ErrExtKeyNotFound = errext.NewErrorCodeOfType(102, ErrorTypeExt)
 
 	// ErrExtNilConfig indicates a nil config was provided.
-	ErrExtNilConfig = errext.NewErrorCode(103)
+	ErrExtNilConfig = errext.NewErrorCodeOfType(103, ErrorTypeExt)
 
 	// ErrExtSetValueFailed indicates setting a value failed.
-	ErrExtSetValueFailed = errext.NewErrorCode(104)
-
-	// ErrExtValueConversionFailed indicates value type conversion failed.
-	ErrExtValueConversionFailed = errext.NewErrorCode(105)
+	ErrExtSetValueFailed = errext.NewErrorCodeOfType(104, ErrorTypeExt)
 )

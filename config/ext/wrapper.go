@@ -27,15 +27,15 @@ type ConfigWrapper struct {
 	wrapped config.Config
 
 	// Cached interface checks
-	marshable MarshableConfig
-	mutable   MutableConfig
+	marshable config.MarshableConfig
+	mutable   config.MutableConfig
 }
 
 // Ensure ConfigWrapper implements all required interfaces
 var (
-	_ config.Config   = (*ConfigWrapper)(nil)
-	_ MarshableConfig = (*ConfigWrapper)(nil)
-	_ MutableConfig   = (*ConfigWrapper)(nil)
+	_ config.Config          = (*ConfigWrapper)(nil)
+	_ config.MarshableConfig = (*ConfigWrapper)(nil)
+	_ config.MutableConfig   = (*ConfigWrapper)(nil)
 )
 
 // NewConfigWrapper creates a new ConfigWrapper that wraps the given config.
@@ -57,10 +57,10 @@ func NewConfigWrapper(cfg config.Config) *ConfigWrapper {
 	}
 
 	// Cache interface checks for performance
-	if mc, ok := cfg.(MarshableConfig); ok {
+	if mc, ok := cfg.(config.MarshableConfig); ok {
 		wrapper.marshable = mc
 	}
-	if mc, ok := cfg.(MutableConfig); ok {
+	if mc, ok := cfg.(config.MutableConfig); ok {
 		wrapper.mutable = mc
 	}
 
@@ -78,11 +78,11 @@ func (w *ConfigWrapper) Unwrap() config.Config {
 
 // GetValue delegates to the wrapped config's GetValue method.
 // Implements config.Config interface.
-func (w *ConfigWrapper) GetValue(ctx context.Context, key string, returnValue any) error {
+func (w *ConfigWrapper) GetValue(ctx context.Context, key string) (any, error) {
 	if w == nil || w.wrapped == nil {
-		return ErrExtNilConfig.New("wrapper or wrapped config is nil", "key", key)
+		return nil, ErrExtNilConfig.New("wrapper or wrapped config is nil", "key", key)
 	}
-	return w.wrapped.GetValue(ctx, key, returnValue)
+	return w.wrapped.GetValue(ctx, key)
 }
 
 // GetConfig delegates to the wrapped config's GetConfig method.
@@ -212,8 +212,7 @@ func unmarshalAny(ctx context.Context, cfg config.Config, key string, target any
 
 	if key == "" {
 		// Get the entire config
-		var rawConfig any
-		err := cfg.GetValue(ctx, "", &rawConfig)
+		rawConfig, err := cfg.GetValue(ctx, "")
 		if err != nil {
 			// Try alternative: the config itself might expose All()
 			if allGetter, ok := cfg.(interface {
@@ -244,8 +243,7 @@ func unmarshalAny(ctx context.Context, cfg config.Config, key string, target any
 			configMap = allGetter.All(ctx)
 		} else {
 			// Try to retrieve as a map value
-			var rawMap any
-			err = cfg.GetValue(ctx, key, &rawMap)
+			rawMap, err := cfg.GetValue(ctx, key)
 			if err != nil {
 				return ErrExtKeyNotFound.New("cannot get config value", "key", key, "error", err)
 			}
@@ -259,30 +257,4 @@ func unmarshalAny(ctx context.Context, cfg config.Config, key string, target any
 
 	// Apply options and decode
 	return decodeWithMapstructure(configMap, target, options...)
-}
-
-// decodeWithMapstructure decodes a map into the target struct using mapstructure.
-// This is a shared helper used by both unmarshalWithMapstructure and unmarshalAny.
-func decodeWithMapstructure(configMap map[string]any, target any, options ...any) error {
-	// Apply options - only process UnmarshalOption types
-	unmarshalCfg := defaultUnmarshalConfig()
-	for _, opt := range options {
-		if fn, ok := opt.(UnmarshalOption); ok {
-			fn(unmarshalCfg)
-		}
-	}
-
-	// Build mapstructure decoder config
-	decoderConfig := buildDecoderConfig(target, unmarshalCfg)
-
-	decoder, err := newDecoder(decoderConfig)
-	if err != nil {
-		return ErrExtUnmarshalFailed.New("failed to create decoder", "error", err)
-	}
-
-	if err := decoder.Decode(configMap); err != nil {
-		return ErrExtUnmarshalFailed.New("failed to decode config", "error", err)
-	}
-
-	return nil
 }
