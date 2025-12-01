@@ -14,7 +14,7 @@ The `base-utils` library provides a set of well-tested, production-ready utiliti
 - **Type Utilities** - Comparison, equality, and string handling interfaces
 - **Generic Registry** - Type-safe registry with comparable keys
 - **Extended Error Handling** - Structured error generation, categorization, and templating
-- **Configuration Management** - Flexible, context-aware configuration management and extensions like Struct unmarshalling, mutable configs, and context-based config discovery
+- **Configuration Management** - Flexible, context-aware configuration management with extensions for struct unmarshalling, mutable configs, context-based config discovery, and koanf integration for multi-source configuration loading
 
 ## Installation
 
@@ -801,6 +801,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | **errext** | Extended error handling | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/errext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/errext) |
 | **config** | Configuration management | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config) |
 | **config/ext** | Config extensions (ConfigWrapper) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/ext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/ext) |
+| **config/koanf** | Koanf wrapper for Config interfaces | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/koanf.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/koanf) |
 
 ---
 
@@ -818,6 +819,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | `errext` | Error handling | `ErrorCode`, `Error` |
 | `config` | Configuration | `Config`, `MutableConfig`, `MarshableConfig` |
 | `config/ext` | Config extensions |  `ConfigWrapper` |
+| `config/koanf` | Koanf wrapper | `KoanfConfig` |
 
 ---
 
@@ -964,6 +966,24 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 - ✅ **High Test Coverage** - >96% test coverage
 
 **Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/ext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/ext)
+
+---
+
+### Config Koanf Package
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/config/koanf/v0.1.0) (November 2025)
+- ✅ **Initial Release** - Koanf wrapper implementing Config, MutableConfig, and MarshableConfig interfaces
+- ✅ **Multiple Configuration Sources** - Support for files, env vars, command-line flags, S3, Consul, Vault, and more via koanf providers
+- ✅ **Provider-Based Loading** - Load configuration from various sources using koanf's extensive provider ecosystem
+- ✅ **Multiple Tag Support** - Unmarshal with koanf, json, yaml, or mapstructure tags
+- ✅ **Configuration Merging** - Merge multiple configurations with override support
+- ✅ **Flat Path Support** - Support for flat path unmarshalling (e.g., `server.port` as single tag)
+- ✅ **Custom Delimiters** - Configurable key delimiter (default: ".")
+- ✅ **Structured Error Handling** - Uses `errext` package for rich error information
+- ✅ **High Test Coverage** - >96% test coverage with comprehensive test suite
+- ✅ **Complete Documentation** - Full API documentation, examples, and usage patterns
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/koanf.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/koanf)
 
 ---
 
