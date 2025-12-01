@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/grinps/go-utils/config"
-	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/v2"
 )
@@ -14,7 +13,10 @@ func TestNewKoanfConfig(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("creates empty config", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx)
+		cfg, err := NewKoanfConfig(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if cfg == nil {
 			t.Fatal("expected non-nil config")
 		}
@@ -30,7 +32,10 @@ func TestNewKoanfConfig(t *testing.T) {
 	})
 
 	t.Run("creates config with custom delimiter", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx, WithDelimiter("/"))
+		cfg, err := NewKoanfConfig(ctx, WithDelimiter("/"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		kCfg := cfg.(*KoanfConfig)
 
 		if kCfg.delimiter != "/" {
@@ -46,7 +51,10 @@ func TestNewKoanfConfig(t *testing.T) {
 			},
 		}
 
-		cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), json.Parser()))
+		cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		kCfg := cfg.(*KoanfConfig)
 
 		val, err := kCfg.GetValue(ctx, "server.port")
@@ -117,7 +125,10 @@ func TestKoanfConfig_GetValue(t *testing.T) {
 		"number": 42,
 	}
 
-	cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	t.Run("retrieves simple value", func(t *testing.T) {
 		val, err := cfg.GetValue(ctx, "string")
@@ -173,7 +184,10 @@ func TestKoanfConfig_GetConfig(t *testing.T) {
 		},
 	}
 
-	cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	t.Run("retrieves sub-config", func(t *testing.T) {
 		subCfg, err := cfg.GetConfig(ctx, "server")
@@ -218,14 +232,18 @@ func TestKoanfConfig_SetValue(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("sets simple value", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx).(*KoanfConfig)
+		cfg, err := NewKoanfConfig(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg := cfg.(*KoanfConfig)
 
-		err := cfg.SetValue(ctx, "key", "value")
+		err = kcfg.SetValue(ctx, "key", "value")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		val, err := cfg.GetValue(ctx, "key")
+		val, err := kcfg.GetValue(ctx, "key")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -236,14 +254,18 @@ func TestKoanfConfig_SetValue(t *testing.T) {
 	})
 
 	t.Run("sets nested value", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx).(*KoanfConfig)
+		cfg, err := NewKoanfConfig(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg := cfg.(*KoanfConfig)
 
-		err := cfg.SetValue(ctx, "server.port", 8080)
+		err = kcfg.SetValue(ctx, "server.port", 8080)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		val, err := cfg.GetValue(ctx, "server.port")
+		val, err := kcfg.GetValue(ctx, "server.port")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -254,15 +276,19 @@ func TestKoanfConfig_SetValue(t *testing.T) {
 	})
 
 	t.Run("overwrites existing value", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx).(*KoanfConfig)
+		cfg, err := NewKoanfConfig(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg := cfg.(*KoanfConfig)
 
-		_ = cfg.SetValue(ctx, "key", "old")
-		err := cfg.SetValue(ctx, "key", "new")
+		_ = kcfg.SetValue(ctx, "key", "old")
+		err = kcfg.SetValue(ctx, "key", "new")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		val, err := cfg.GetValue(ctx, "key")
+		val, err := kcfg.GetValue(ctx, "key")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -273,9 +299,13 @@ func TestKoanfConfig_SetValue(t *testing.T) {
 	})
 
 	t.Run("returns error for empty key", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx).(*KoanfConfig)
+		cfg, err := NewKoanfConfig(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg := cfg.(*KoanfConfig)
 
-		err := cfg.SetValue(ctx, "", "value")
+		err = kcfg.SetValue(ctx, "", "value")
 		if err == nil {
 			t.Fatal("expected error for empty key")
 		}
@@ -321,7 +351,10 @@ func TestKoanfConfig_Unmarshal(t *testing.T) {
 		},
 	}
 
-	cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	t.Run("unmarshals entire config", func(t *testing.T) {
 		var app AppConfig
@@ -413,18 +446,22 @@ func TestKoanfConfig_Load(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("loads from provider", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx).(*KoanfConfig)
+		cfg, err := NewKoanfConfig(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg := cfg.(*KoanfConfig)
 
 		data := map[string]any{
 			"key": "value",
 		}
 
-		err := cfg.Load(ctx, confmap.Provider(data, "."), nil)
+		err = kcfg.Load(ctx, confmap.Provider(data, "."), nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		val, err := cfg.GetValue(ctx, "key")
+		val, err := kcfg.GetValue(ctx, "key")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -435,9 +472,13 @@ func TestKoanfConfig_Load(t *testing.T) {
 	})
 
 	t.Run("returns error for nil provider", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx).(*KoanfConfig)
+		cfg, err := NewKoanfConfig(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg := cfg.(*KoanfConfig)
 
-		err := cfg.Load(ctx, nil, nil)
+		err = kcfg.Load(ctx, nil, nil)
 		if err == nil {
 			t.Fatal("expected error for nil provider")
 		}
@@ -456,35 +497,43 @@ func TestKoanfConfig_Merge(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("merges configs", func(t *testing.T) {
-		cfg1 := NewKoanfConfig(ctx, WithProvider(confmap.Provider(map[string]any{
+		cfg1, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(map[string]any{
 			"key1": "value1",
 			"key2": "old",
-		}, "."), nil)).(*KoanfConfig)
+		}, "."), nil))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg1 := cfg1.(*KoanfConfig)
 
-		cfg2 := NewKoanfConfig(ctx, WithProvider(confmap.Provider(map[string]any{
+		cfg2, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(map[string]any{
 			"key2": "new",
 			"key3": "value3",
-		}, "."), nil)).(*KoanfConfig)
+		}, "."), nil))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg2 := cfg2.(*KoanfConfig)
 
-		err := cfg1.Merge(ctx, cfg2)
+		err = kcfg1.Merge(ctx, kcfg2)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
 		// Check key1 is preserved
-		val, _ := cfg1.GetValue(ctx, "key1")
+		val, _ := kcfg1.GetValue(ctx, "key1")
 		if val != "value1" {
 			t.Errorf("expected key1 %q, got %q", "value1", val)
 		}
 
 		// Check key2 is overwritten
-		val, _ = cfg1.GetValue(ctx, "key2")
+		val, _ = kcfg1.GetValue(ctx, "key2")
 		if val != "new" {
 			t.Errorf("expected key2 %q, got %q", "new", val)
 		}
 
 		// Check key3 is added
-		val, _ = cfg1.GetValue(ctx, "key3")
+		val, _ = kcfg1.GetValue(ctx, "key3")
 		if val != "value3" {
 			t.Errorf("expected key3 %q, got %q", "value3", val)
 		}
@@ -492,18 +541,26 @@ func TestKoanfConfig_Merge(t *testing.T) {
 
 	t.Run("returns error for nil config", func(t *testing.T) {
 		var nilCfg *KoanfConfig
-		cfg2 := NewKoanfConfig(ctx).(*KoanfConfig)
+		cfg2, err := NewKoanfConfig(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg2 := cfg2.(*KoanfConfig)
 
-		err := nilCfg.Merge(ctx, cfg2)
+		err = nilCfg.Merge(ctx, kcfg2)
 		if err == nil {
 			t.Fatal("expected error for nil config")
 		}
 	})
 
 	t.Run("returns error for nil other config", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx).(*KoanfConfig)
+		cfg, err := NewKoanfConfig(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg := cfg.(*KoanfConfig)
 
-		err := cfg.Merge(ctx, nil)
+		err = kcfg.Merge(ctx, nil)
 		if err == nil {
 			t.Fatal("expected error for nil other config")
 		}
@@ -519,9 +576,13 @@ func TestKoanfConfig_All(t *testing.T) {
 			"key2": "value2",
 		}
 
-		cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil)).(*KoanfConfig)
+		cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg := cfg.(*KoanfConfig)
 
-		all := cfg.All(ctx)
+		all := kcfg.All(ctx)
 		if all == nil {
 			t.Fatal("expected non-nil map")
 		}
@@ -550,16 +611,20 @@ func TestKoanfConfig_Exists(t *testing.T) {
 		"key": "value",
 	}
 
-	cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil)).(*KoanfConfig)
+	cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	kcfg := cfg.(*KoanfConfig)
 
 	t.Run("returns true for existing key", func(t *testing.T) {
-		if !cfg.Exists("key") {
+		if !kcfg.Exists("key") {
 			t.Error("expected key to exist")
 		}
 	})
 
 	t.Run("returns false for missing key", func(t *testing.T) {
-		if cfg.Exists("nonexistent") {
+		if kcfg.Exists("nonexistent") {
 			t.Error("expected key to not exist")
 		}
 	})
@@ -584,10 +649,14 @@ func TestKoanfConfig_Keys(t *testing.T) {
 		},
 	}
 
-	cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil)).(*KoanfConfig)
+	cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	kcfg := cfg.(*KoanfConfig)
 
 	t.Run("returns all keys", func(t *testing.T) {
-		keys := cfg.Keys("")
+		keys := kcfg.Keys("")
 		if len(keys) == 0 {
 			t.Fatal("expected non-empty keys")
 		}
@@ -613,7 +682,7 @@ func TestKoanfConfig_Keys(t *testing.T) {
 	})
 
 	t.Run("returns keys with prefix", func(t *testing.T) {
-		keys := cfg.Keys("server")
+		keys := kcfg.Keys("server")
 		if len(keys) == 0 {
 			t.Fatal("expected non-empty keys")
 		}
@@ -638,33 +707,45 @@ func TestKoanfConfig_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("deletes existing key", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(map[string]any{
+		cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(map[string]any{
 			"key": "value",
-		}, "."), nil)).(*KoanfConfig)
+		}, "."), nil))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg := cfg.(*KoanfConfig)
 
-		err := cfg.Delete("key")
+		err = kcfg.Delete("key")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if cfg.Exists("key") {
+		if kcfg.Exists("key") {
 			t.Error("expected key to be deleted")
 		}
 	})
 
 	t.Run("returns error for missing key", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx).(*KoanfConfig)
+		cfg, err := NewKoanfConfig(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg := cfg.(*KoanfConfig)
 
-		err := cfg.Delete("nonexistent")
+		err = kcfg.Delete("nonexistent")
 		if err == nil {
 			t.Fatal("expected error for missing key")
 		}
 	})
 
 	t.Run("returns error for empty key", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx).(*KoanfConfig)
+		cfg, err := NewKoanfConfig(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg := cfg.(*KoanfConfig)
 
-		err := cfg.Delete("")
+		err = kcfg.Delete("")
 		if err == nil {
 			t.Fatal("expected error for empty key")
 		}
@@ -683,9 +764,13 @@ func TestKoanfConfig_Koanf(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns underlying koanf instance", func(t *testing.T) {
-		cfg := NewKoanfConfig(ctx).(*KoanfConfig)
+		cfg, err := NewKoanfConfig(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		kcfg := cfg.(*KoanfConfig)
 
-		k := cfg.Koanf()
+		k := kcfg.Koanf()
 		if k == nil {
 			t.Fatal("expected non-nil koanf instance")
 		}
@@ -700,31 +785,32 @@ func TestKoanfConfig_Koanf(t *testing.T) {
 	})
 }
 
-func TestNewMutableKoanfConfig(t *testing.T) {
+// TestKoanfConfigImplementsInterfaces verifies that KoanfConfig implements all required interfaces
+func TestKoanfConfigImplementsInterfaces(t *testing.T) {
 	ctx := context.Background()
 
-	cfg := NewMutableKoanfConfig(ctx)
+	cfg, err := NewKoanfConfig(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if cfg == nil {
 		t.Fatal("expected non-nil config")
+	}
+
+	// Verify it implements Config
+	_, ok := cfg.(config.Config)
+	if !ok {
+		t.Fatal("expected Config interface")
 	}
 
 	// Verify it implements MutableConfig
-	_, ok := cfg.(config.MutableConfig)
+	_, ok = cfg.(config.MutableConfig)
 	if !ok {
 		t.Fatal("expected MutableConfig interface")
 	}
-}
-
-func TestNewMarshableKoanfConfig(t *testing.T) {
-	ctx := context.Background()
-
-	cfg := NewMarshableKoanfConfig(ctx)
-	if cfg == nil {
-		t.Fatal("expected non-nil config")
-	}
 
 	// Verify it implements MarshableConfig
-	_, ok := cfg.(config.MarshableConfig)
+	_, ok = cfg.(config.MarshableConfig)
 	if !ok {
 		t.Fatal("expected MarshableConfig interface")
 	}

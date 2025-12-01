@@ -23,10 +23,14 @@ func TestWithTag(t *testing.T) {
 		},
 	}
 
-	cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil)).(*KoanfConfig)
+	cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	kcfg := cfg.(*KoanfConfig)
 
 	var jsonCfg JSONConfig
-	err := cfg.Unmarshal(ctx, "server", &jsonCfg, WithJSONTag())
+	err = kcfg.Unmarshal(ctx, "server", &jsonCfg, WithJSONTag())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -55,10 +59,14 @@ func TestWithYAMLTag(t *testing.T) {
 		},
 	}
 
-	cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil)).(*KoanfConfig)
+	cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	kcfg := cfg.(*KoanfConfig)
 
 	var yamlCfg YAMLConfig
-	err := cfg.Unmarshal(ctx, "server", &yamlCfg, WithYAMLTag())
+	err = kcfg.Unmarshal(ctx, "server", &yamlCfg, WithYAMLTag())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -83,10 +91,14 @@ func TestWithMapstructureTag(t *testing.T) {
 		},
 	}
 
-	cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil)).(*KoanfConfig)
+	cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	kcfg := cfg.(*KoanfConfig)
 
 	var msCfg MapstructureConfig
-	err := cfg.Unmarshal(ctx, "server", &msCfg, WithMapstructureTag())
+	err = kcfg.Unmarshal(ctx, "server", &msCfg, WithMapstructureTag())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -111,10 +123,14 @@ func TestWithKoanfTag(t *testing.T) {
 		},
 	}
 
-	cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil)).(*KoanfConfig)
+	cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	kcfg := cfg.(*KoanfConfig)
 
 	var kCfg KoanfTagConfig
-	err := cfg.Unmarshal(ctx, "server", &kCfg, WithKoanfTag())
+	err = kcfg.Unmarshal(ctx, "server", &kCfg, WithKoanfTag())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -139,10 +155,14 @@ func TestWithFlatPaths(t *testing.T) {
 		},
 	}
 
-	cfg := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil)).(*KoanfConfig)
+	cfg, err := NewKoanfConfig(ctx, WithProvider(confmap.Provider(data, "."), nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	kcfg := cfg.(*KoanfConfig)
 
 	var flatCfg FlatConfig
-	err := cfg.Unmarshal(ctx, "", &flatCfg, WithFlatPaths(true))
+	err = kcfg.Unmarshal(ctx, "", &flatCfg, WithFlatPaths(true))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -166,7 +186,10 @@ func TestWithKoanfInstance(t *testing.T) {
 	}, "."), nil)
 
 	// Wrap it with KoanfConfig using WithKoanfInstance
-	cfg := NewKoanfConfig(ctx, WithKoanfInstance(k))
+	cfg, err := NewKoanfConfig(ctx, WithKoanfInstance(k))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	val, err := cfg.GetValue(ctx, "key")
 	if err != nil {
@@ -181,16 +204,20 @@ func TestWithKoanfInstance(t *testing.T) {
 func TestWithDelimiter(t *testing.T) {
 	ctx := context.Background()
 
-	cfg := NewKoanfConfig(ctx, WithDelimiter("/")).(*KoanfConfig)
+	cfg, err := NewKoanfConfig(ctx, WithDelimiter("/"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	kcfg := cfg.(*KoanfConfig)
 
-	if cfg.delimiter != "/" {
-		t.Errorf("expected delimiter %q, got %q", "/", cfg.delimiter)
+	if kcfg.delimiter != "/" {
+		t.Errorf("expected delimiter %q, got %q", "/", kcfg.delimiter)
 	}
 
 	// Test that the delimiter works
-	_ = cfg.SetValue(ctx, "server/port", 8080)
+	_ = kcfg.SetValue(ctx, "server/port", 8080)
 
-	val, err := cfg.GetValue(ctx, "server/port")
+	val, err := kcfg.GetValue(ctx, "server/port")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

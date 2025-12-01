@@ -66,7 +66,9 @@ func NewKoanfConfig(ctx context.Context, options ...any) (config.Config, error) 
 			// Load from provider
 			if o.Provider != nil {
 				loadErr := cfg.Load(ctx, o.Provider, o.Parser)
-				loadErrs = append(loadErrs, loadErr)
+				if loadErr != nil {
+					loadErrs = append(loadErrs, loadErr)
+				}
 			}
 		}
 	}
