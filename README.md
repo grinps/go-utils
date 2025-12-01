@@ -525,15 +525,42 @@ func init() {
 
 **Import:** `github.com/grinps/go-utils/config`
 
-A flexible, context-aware configuration management library supporting nested maps and type-safe retrieval.
+A flexible, context-aware configuration management library supporting nested maps with dual retrieval APIs.
 
 #### Features
 - **Context Aware**: All configuration operations accept `context.Context`.
-- **Type-Safe Retrieval**: Generic `GetValueE[T]` function with compile-time type safety.
-- **Pointer-Based Assignment**: Values are assigned via pointers, enabling default value patterns.
+- **Dual Retrieval APIs**: Direct `GetValue(ctx, key) (any, error)` and type-safe `GetValueE[T](ctx, key, *T) error`.
+- **Type-Safe Retrieval**: Generic `GetValueE[T]` function with compile-time type safety and pointer-based assignment.
+- **Default Value Pattern**: GetValueE preserves existing values when keys are not found.
 - **Dot-Notation Keys**: Access nested values using dot notation (e.g., `server.port`).
-- **Simple In-Memory Implementation**: Includes `SimpleConfig` for easy testing and mocking.
+- **Nested Configurations**: Retrieve sub-configurations via `GetConfig(ctx, key)`.
+- **Mutable Configurations**: `MutableConfig` interface for setting values with `SetValue(ctx, key, value)`.
+- **Marshable Configurations**: `MarshableConfig` interface for unmarshalling into structs.
+- **Simple In-Memory Implementation**: `SimpleConfig` implements all interfaces for easy testing.
 - **Structured Error Handling**: Uses `errext` package for rich error information.
+- **High Test Coverage**: >93% test coverage.
+
+#### Core Interfaces
+
+```go
+// Config - Basic configuration retrieval
+type Config interface {
+    GetValue(ctx context.Context, key string) (any, error)
+    GetConfig(ctx context.Context, key string) (Config, error)
+}
+
+// MutableConfig - Supports setting values
+type MutableConfig interface {
+    Config
+    SetValue(ctx context.Context, key string, value any) error
+}
+
+// MarshableConfig - Supports unmarshalling into structs
+type MarshableConfig interface {
+    Config
+    Unmarshal(ctx context.Context, key string, target any, options ...any) error
+}
+```
 
 #### Quick Example
 
@@ -545,18 +572,79 @@ import (
 )
 
 func main() {
+    ctx := context.Background()
     data := map[string]any{
-        "server": map[string]any{"port": 8080},
+        "server": map[string]any{
+            "host": "localhost",
+            "port": 8080,
+        },
     }
-    cfg := config.NewSimpleConfig(context.Background(), config.WithConfigurationMap(data))
-    var port int
-    err := config.GetValueE(context.Background(), "server.port", &port)
+    cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+    
+    // Method 1: Direct GetValue - returns (any, error)
+    val, err := cfg.GetValue(ctx, "server.port")
     if err != nil {
         log.Fatal(err)
     }
-    fmt.Println(port)
+    port := val.(int) // Type assertion required
+    
+    // Method 2: Type-safe GetValueE (recommended)
+    var host string
+    err = config.GetValueE(ctx, "server.host", &host)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // Method 3: Default value pattern
+    timeout := 30 // default
+    config.GetValueE(ctx, "server.timeout", &timeout)
+    // timeout remains 30 if key doesn't exist
+    
+    // Store config in context
+    ctx = config.ContextWithConfig(ctx, cfg)
+    
+    // Retrieve from context
+    cfg = config.ContextConfig(ctx, true)
 }
 ```
+
+#### Setting Values
+
+```go
+// SimpleConfig implements MutableConfig
+cfg := config.NewSimpleConfig(ctx)
+
+// Set nested values (creates intermediate maps automatically)
+err := cfg.SetValue(ctx, "server.port", 9090)
+
+// Or use package-level function with context
+ctx = config.ContextWithConfig(ctx, cfg)
+err = config.SetValue(ctx, "server.host", "0.0.0.0")
+```
+
+#### Unmarshalling into Structs
+
+```go
+type ServerConfig struct {
+    Host string `config:"host"`
+    Port int    `config:"port"`
+}
+
+// SimpleConfig implements MarshableConfig
+var server ServerConfig
+err := cfg.Unmarshal(ctx, "server", &server)
+
+// Or use package-level function with context
+err = config.Unmarshal(ctx, "server", &server)
+```
+
+#### Key Functions
+- `NewSimpleConfig(ctx, opts...)` - Creates in-memory config
+- `GetValueE[T](ctx, key, *T)` - Type-safe retrieval from context
+- `SetValue(ctx, key, value)` - Sets value in context config
+- `Unmarshal[T](ctx, key, *T)` - Unmarshals into struct from context
+- `ContextWithConfig(ctx, cfg)` - Stores config in context
+- `ContextConfig(ctx, useDefault)` - Retrieves config from context
 
 ---
 
@@ -564,13 +652,11 @@ func main() {
 
 **Import:** `github.com/grinps/go-utils/config/ext`
 
-Extended configuration interfaces and utilities that build upon the base `config` package with context-based config discovery.
+Extended configuration utilities that build upon the base `config` package.
 
 #### Features
-- **Context-Based Functions**: `Unmarshal` and `SetValue` extract config from context automatically.
 - **ConfigWrapper**: Wraps any `config.Config` to provide `MarshableConfig` and `MutableConfig` capabilities with mapstructure fallback.
-- **MutableConfig Interface**: Defines `SetValue` for modifying configuration.
-- **MarshableConfig Interface**: Defines `Unmarshal` for struct unmarshalling.
+- **Mapstructure Fallback**: Automatic fallback to mapstructure for configs that don't natively support unmarshalling.
 - **Flexible Options**: Customizable unmarshalling via functional options (tag names, strict mode, decode hooks).
 - **Type Conversions**: Automatic string-to-duration, string-to-slice, and weak type conversions.
 - **High Test Coverage**: >96% test coverage.
@@ -596,43 +682,28 @@ func main() {
     }
     cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
     
-    // Store config in context
-    ctx = config.ContextWithConfig(ctx, cfg)
+    // Wrap config to get consistent unmarshalling
+    wrapper := ext.NewConfigWrapper(cfg)
     
-    // Unmarshal extracts config from context
+    // Unmarshal using mapstructure fallback
     var server ServerConfig
-    if err := ext.Unmarshal(ctx, "server", &server); err != nil {
+    if err := wrapper.Unmarshal(ctx, "server", &server); err != nil {
         log.Fatal(err)
     }
     
-    // SetValue extracts config from context
-    if err := ext.SetValue(ctx, "server.port", 9090); err != nil {
-        log.Fatal(err)
+    // SetValue if config supports it
+    if wrapper.IsMutable() {
+        wrapper.SetValue(ctx, "server.port", 9090)
     }
-}
-```
-
-#### Using ConfigWrapper for Mapstructure Fallback
-
-```go
-// Wrap any config to get consistent unmarshalling
-wrapper := ext.NewConfigWrapper(cfg)
-
-var server ServerConfig
-err := wrapper.Unmarshal(ctx, "server", &server)
-
-// Check capabilities
-if wrapper.IsMutable() {
-    wrapper.SetValue(ctx, "server.port", 9090)
 }
 ```
 
 #### Key Functions
-- `Unmarshal(ctx, key, target, opts...)` - Extracts config from context, delegates to `MarshableConfig`
-- `UnmarshalWithConfig(ctx, cfg, key, target, opts...)` - Uses explicit config
-- `SetValue(ctx, key, value)` - Extracts config from context, requires `MutableConfig`
-- `SetValueWithConfig(ctx, cfg, key, value)` - Uses explicit config
 - `NewConfigWrapper(cfg)` - Wraps config with mapstructure fallback
+- `wrapper.Unmarshal(ctx, key, target, opts...)` - Unmarshals config into struct
+- `wrapper.SetValue(ctx, key, value)` - Sets value if config is mutable
+- `wrapper.IsMutable()` - Checks if config supports mutation
+- `wrapper.IsMarshable()` - Checks if config has native unmarshal support
 
 ---
 
@@ -654,6 +725,8 @@ go test ./platform/...
 ### Test Coverage
 
 - **Platform Package**: 93.2%
+- **Config Package**: 93.3%
+- **Config Ext Package**: 96.4%
 - **System Package**: Comprehensive unit tests
 - **GoSub Package**: Selection and event tests
 - **Registry Package**: Generic type tests
@@ -679,211 +752,7 @@ Mock implementations provided for all major interfaces, enabling comprehensive u
 ### 5. **Zero External Dependencies**
 Core packages minimize external dependencies, relying primarily on the Go standard library.
 
----
 
-## Usage Patterns
-
-### Dependency Injection
-
-```go
-type MyService struct {
-    platform platform.Platform
-    system   system.System
-}
-
-func NewMyService(p platform.Platform, s system.System) *MyService {
-    return &MyService{
-        platform: p,
-        system:   s,
-    }
-}
-
-// Production
-service := NewMyService(
-    platform.NewOSPlatform(),
-    system.NewSystem(),
-)
-
-// Testing
-service := NewMyService(
-    platform.NewMockPlatform(),
-    system.NewMockSystem(),
-)
-```
-
-### Channel Selection
-
-```go
-func MonitorChannels(ctx context.Context) {
-    collection := gosub.NewSelectCollection()
-    
-    // Add context monitoring
-    collection.Register(gosub.NewContextSelection(ctx, func(event gosub.SelectEvent, col gosub.SelectCollection) bool {
-        log.Println("Context cancelled")
-        return false // Stop selecting
-    }))
-    
-    // Add signal monitoring
-    sigChan := make(chan os.Signal, 1)
-    signal.Notify(sigChan, os.Interrupt)
-    collection.Register(gosub.NewSignalSelection(sigChan, func(event gosub.SelectEvent, col gosub.SelectCollection) bool {
-        log.Println("Signal received")
-        return false
-    }))
-    
-    collection.Initialize()
-    collection.Select()
-}
-```
-
-### Service Registry
-
-```go
-func SetupServices(ctx context.Context) error {
-    sys := system.NewSystem()
-    
-    // Register services
-    sys.RegisterService(ctx, "database", dbInstance)
-    sys.RegisterService(ctx, "cache", cacheInstance)
-    sys.RegisterService(ctx, "logger", loggerInstance)
-    
-    // Retrieve and use services
-    db, err := sys.GetService(ctx, "database", "Database")
-    if err != nil {
-        return err
-    }
-    
-    // Use db...
-    return nil
-}
-```
-
----
-
-## Best Practices
-
-### 1. Use Platform Abstraction for OS Operations
-
-❌ **Don't:**
-```go
-func LoadConfig() error {
-    data, err := os.ReadFile("/etc/config.json")
-    // ...
-}
-```
-
-✅ **Do:**
-```go
-func LoadConfig(p platform.Platform) error {
-    data, err := p.File().ReadFile("/etc/config.json")
-    // ...
-}
-```
-
-### 2. Leverage Dependency Injection
-
-❌ **Don't:**
-```go
-func ProcessData() {
-    db := database.NewConnection() // Hard-coded dependency
-    // ...
-}
-```
-
-✅ **Do:**
-```go
-func ProcessData(sys system.System) {
-    db, _ := sys.GetService(ctx, "database", "Database")
-    // ...
-}
-```
-
-### 3. Use Context for Cancellation
-
-❌ **Don't:**
-```go
-func LongRunningTask() {
-    for {
-        // No way to cancel
-        doWork()
-    }
-}
-```
-
-✅ **Do:**
-```go
-func LongRunningTask(ctx context.Context) {
-    for {
-        select {
-        case <-ctx.Done():
-            return
-        default:
-            doWork()
-        }
-    }
-}
-```
-
-### 4. Mock in Tests
-
-```go
-func TestMyService(t *testing.T) {
-    // Setup mocks
-    mockPlatform := platform.NewMockPlatform()
-    mockPlatform.Env().Setenv("API_KEY", "test-key")
-    mockPlatform.File().WriteFile("/config.json", []byte(`{}`), 0644)
-    
-    // Test with mocks
-    service := NewMyService(mockPlatform)
-    result := service.DoWork()
-    
-    // Assertions...
-}
-```
-
----
-
-## Migration Guide
-
-### From Direct OS Calls to Platform Abstraction
-
-**Before:**
-```go
-func SaveData(filename string, data []byte) error {
-    return os.WriteFile(filename, data, 0644)
-}
-```
-
-**After:**
-```go
-func SaveData(p platform.Platform, filename string, data []byte) error {
-    return p.File().WriteFile(filename, data, 0644)
-}
-```
-
-### From Global Variables to Dependency Injection
-
-**Before:**
-```go
-var globalDB *Database
-
-func ProcessRecord(id int) error {
-    return globalDB.Update(id)
-}
-```
-
-**After:**
-```go
-func ProcessRecord(sys system.System, id int) error {
-    db, err := sys.GetService(ctx, "database", "Database")
-    if err != nil {
-        return err
-    }
-    return db.(*Database).Update(id)
-}
-```
-
----
 
 ## Contributing
 
@@ -931,7 +800,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | **base-utils** | Core utilities | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/base-utils.svg)](https://pkg.go.dev/github.com/grinps/go-utils/base-utils) |
 | **errext** | Extended error handling | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/errext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/errext) |
 | **config** | Configuration management | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config) |
-| **config/ext** | Config extensions (Unmarshal, SetValue, ConfigWrapper) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/ext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/ext) |
+| **config/ext** | Config extensions (ConfigWrapper) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/ext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/ext) |
 
 ---
 
@@ -947,8 +816,8 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | `logs` | Logging | `Log()`, `Warn()` |
 | `base_utils` | Core utilities | `Equality`, `Comparable` |
 | `errext` | Error handling | `ErrorCode`, `Error` |
-| `config` | Configuration | `Config` |
-| `config/ext` | Config extensions | `MutableConfig`, `MarshableConfig`, `ConfigWrapper` |
+| `config` | Configuration | `Config`, `MutableConfig`, `MarshableConfig` |
+| `config/ext` | Config extensions |  `ConfigWrapper` |
 
 ---
 
@@ -1070,10 +939,13 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 
 ### Config Package
 
-#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/config/v0.1.0) (November 2025)
+#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/config/v0.2.0) (November 2025)
 - ✅ **Initial Release** - Flexible, context-aware configuration management
 - ✅ **Context Aware** - All configuration operations accept `context.Context`.
 - ✅ **Type-Safe Retrieval** - Generic `GetValueE[T]` functions.
+- ✅ **Context-Based Functions** - `Unmarshal` and `SetValue` extract config from context automatically
+- ✅ **MutableConfig Interface** - Defines `SetValue` for modifying configuration
+- ✅ **MarshableConfig Interface** - Defines `Unmarshal` for struct unmarshalling
 - ✅ **Dot-Notation Keys** - Access nested values using dot notation (e.g., `server.port`).
 - ✅ **Simple In-Memory Implementation** - Includes `SimpleConfig` for easy testing and mocking.
 - ✅ **Structured Error Handling** - Uses `errext` package for rich error information.
@@ -1084,11 +956,8 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 
 ### Config Ext Package
 
-#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/config/ext/v0.1.0) (November 2025)
-- ✅ **Context-Based Functions** - `Unmarshal` and `SetValue` extract config from context automatically
+#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/config/ext/v0.2.0) (November 2025)
 - ✅ **ConfigWrapper** - Wraps any `config.Config` with `MarshableConfig` and `MutableConfig` capabilities
-- ✅ **MutableConfig Interface** - Defines `SetValue` for modifying configuration
-- ✅ **MarshableConfig Interface** - Defines `Unmarshal` for struct unmarshalling
 - ✅ **Flexible Unmarshal Options** - Tag names (`json`, `yaml`, `mapstructure`), strict mode, decode hooks
 - ✅ **Mapstructure Fallback** - `ConfigWrapper` provides mapstructure-based unmarshalling for any config
 - ✅ **Type Conversions** - String-to-duration, string-to-slice, weak type conversions
