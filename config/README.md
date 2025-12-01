@@ -5,8 +5,9 @@ The `config` package provides a flexible, context-aware configuration management
 ## Features
 
 - **Context Aware**: All configuration operations accept `context.Context`.
-- **Type-Safe Retrieval**: Generic `GetValueE[T]` function with compile-time type safety.
-- **Pointer-Based Assignment**: Values are assigned via pointers, enabling default value patterns.
+- **Dual Retrieval APIs**: Direct `GetValue(ctx, key) (any, error)` and type-safe `GetValueE[T](ctx, key, *T) error`.
+- **Type-Safe Retrieval**: Generic `GetValueE[T]` function with compile-time type safety and pointer-based assignment.
+- **Default Value Pattern**: GetValueE preserves existing values when keys are not found.
 - **Dot-Notation Keys**: Access nested values using dot notation (e.g., `server.port`).
 - **Simple In-Memory Implementation**: Includes `SimpleConfig` for easy testing and mocking.
 - **Structured Error Handling**: Uses `errext` package for rich error information.
@@ -51,18 +52,18 @@ func main() {
 
 ### Retrieving Values
 
-The API uses pointer-based assignment for type safety and default value support:
+The package provides two retrieval approaches:
 
 ```go
-// Method 1: Direct config method (pointer-based)
-var port int
-err := cfg.GetValue(ctx, "server.port", &port)
+// Method 1: Direct GetValue - returns (any, error)
+val, err := cfg.GetValue(ctx, "server.port")
 if err != nil {
     log.Fatal(err)
 }
+port := val.(int) // Type assertion required
 fmt.Println(port) // 8080
 
-// Method 2: Package-level function (recommended)
+// Method 2: Type-safe GetValueE (recommended)
 var host string
 err = config.GetValueE(ctx, "server.host", &host)
 if err != nil {
@@ -70,7 +71,7 @@ if err != nil {
 }
 fmt.Println(host) // "localhost"
 
-// Method 3: With default value pattern
+// Method 3: With default value pattern (GetValueE only)
 timeout := 30 // default value
 err = config.GetValueE(ctx, "server.timeout", &timeout)
 // If key is missing, timeout retains its default value (30)
@@ -90,8 +91,11 @@ if err != nil {
     log.Fatal(err)
 }
 
-var host string
-err = serverConfig.GetValue(ctx, "host", &host)
+val, err := serverConfig.GetValue(ctx, "host")
+if err != nil {
+    log.Fatal(err)
+}
+host := val.(string)
 fmt.Println(host) // "localhost"
 ```
 
@@ -103,8 +107,8 @@ cfg := config.NewSimpleConfig(ctx,
     config.WithConfigurationMap(data),
     config.WithDelimiter("/"))
 
-var port int
-err := cfg.GetValue(ctx, "server/port", &port)
+val, err := cfg.GetValue(ctx, "server/port")
+port := val.(int)
 ```
 
 ## API Reference
@@ -113,9 +117,9 @@ err := cfg.GetValue(ctx, "server/port", &port)
 
 ```go
 type Config interface {
-    // GetValue retrieves a configuration value by key and stores it in the provided pointer.
-    // The returnValue parameter must be a non-nil pointer.
-    GetValue(ctx context.Context, key string, returnValue any) error
+    // GetValue retrieves a configuration value by key.
+    // Returns the value and an error if the key is not found.
+    GetValue(ctx context.Context, key string) (any, error)
 
     // GetConfig retrieves a nested configuration as a new Config instance.
     GetConfig(ctx context.Context, key string) (Config, error)

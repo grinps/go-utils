@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"reflect"
 )
 
 var defaultConfig Config = NewSimpleConfig(context.Background())
@@ -33,8 +34,20 @@ func GetValueE[T any](ctx context.Context, key string, returnValue *T) error {
 		return ErrConfigNilConfig.New("nil config", "key", key)
 	}
 
-	// Use the Config.GetValue method directly - it now accepts a pointer
-	return applicableConfig.GetValue(ctx, key, returnValue)
+	// Get the value
+	val, err := applicableConfig.GetValue(ctx, key)
+	if err != nil {
+		return err
+	}
+
+	// Type assertion and assignment
+	typedVal, ok := val.(T)
+	if !ok {
+		return ErrConfigInvalidValueType.New("value type mismatch", "key", key, "expected_type", reflect.TypeOf(returnValue).Elem().String(), "actual_type", reflect.TypeOf(val).String())
+	}
+
+	*returnValue = typedVal
+	return nil
 }
 
 type contextConfigType struct{}

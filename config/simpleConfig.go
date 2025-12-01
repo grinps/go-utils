@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 )
 
@@ -16,38 +15,23 @@ type simpleConfig struct {
 	delimiter        string
 }
 
-// GetValue retrieves a value from the configuration using dot-notation keys and stores it in returnValue.
-// The returnValue parameter must be a non-nil pointer.
-// Returns an error if the config is nil, the key is empty, the value is not found, or type conversion fails.
+// GetValue retrieves a value from the configuration using dot-notation keys.
+// Returns the value and an error if the config is nil, the key is empty, or the value is not found.
 //
 // Example:
 //
-//	var port int
-//	err := cfg.GetValue(ctx, "server.port", &port)
-//
-//	var host string
-//	err := cfg.GetValue(ctx, "database.host", &host)
-func (cfg *simpleConfig) GetValue(ctx context.Context, key string, returnValue any) error {
-	if returnValue == nil {
-		return ErrConfigNilReturnValue.New("nil return value", "key", key)
-	}
-
-	// Check if returnValue is a pointer
-	rv := reflect.ValueOf(returnValue)
-	if rv.Kind() != reflect.Ptr {
-		return ErrConfigNilReturnValue.New("return value must be a pointer", "key", key, "type", rv.Kind().String())
-	}
-
-	if rv.IsNil() {
-		return ErrConfigNilReturnValue.New("nil return value pointer", "key", key)
-	}
-
+//	port, err := cfg.GetValue(ctx, "server.port")
+//	if err != nil {
+//	    // handle error
+//	}
+//	portInt := port.(int)
+func (cfg *simpleConfig) GetValue(ctx context.Context, key string) (any, error) {
 	if cfg == nil || cfg.configurationMap == nil {
-		return ErrConfigNilConfig.New("nil config or map", "key", key)
+		return nil, ErrConfigNilConfig.New("nil config or map", "key", key)
 	}
 
 	if key == "" {
-		return ErrConfigEmptyKey.New("empty key", "key", key)
+		return nil, ErrConfigEmptyKey.New("empty key", "key", key)
 	}
 
 	keyParts := strings.Split(key, cfg.delimiter)
@@ -55,34 +39,25 @@ func (cfg *simpleConfig) GetValue(ctx context.Context, key string, returnValue a
 
 	for i, part := range keyParts {
 		if currentVal == nil {
-			return ErrConfigMissingValue.New("nil value at intermediate key", "key", key, "intermediate_key", strings.Join(keyParts[:i], DefaultKeyDelimiter))
+			return nil, ErrConfigMissingValue.New("nil value at intermediate key", "key", key, "intermediate_key", strings.Join(keyParts[:i], DefaultKeyDelimiter))
 		}
 
 		if m, ok := currentVal.(map[string]any); ok {
 			if val, found := m[part]; found {
 				currentVal = val
 			} else {
-				return ErrConfigMissingValue.New("missing value", "key", key)
+				return nil, ErrConfigMissingValue.New("missing value", "key", key)
 			}
 		} else {
-			return ErrConfigInvalidValue.New("intermediate value is not a map", "key", key, "current_value", currentVal)
+			return nil, ErrConfigInvalidValue.New("intermediate value is not a map", "key", key, "current_value", currentVal)
 		}
 	}
 
-	// Type-safe assignment using reflection
 	if currentVal == nil {
-		return ErrConfigMissingValue.New("value is nil", "key", key)
+		return nil, ErrConfigMissingValue.New("value is nil", "key", key)
 	}
 
-	targetValue := rv.Elem()
-	sourceValue := reflect.ValueOf(currentVal)
-
-	if !sourceValue.Type().AssignableTo(targetValue.Type()) {
-		return ErrConfigInvalidValueType.New("value type mismatch", "key", key, "expected_type", targetValue.Type().String(), "actual_type", sourceValue.Type().String(), "actual_value", currentVal)
-	}
-
-	targetValue.Set(sourceValue)
-	return nil
+	return currentVal, nil
 }
 
 // GetAsMap converts various map types to map[string]any.
@@ -132,8 +107,7 @@ func GetAsMap(ctx context.Context, input any) (map[string]any, error) {
 //	var port int
 //	err = serverCfg.GetValue(ctx, "port", &port)
 func (cfg *simpleConfig) GetConfig(ctx context.Context, key string) (Config, error) {
-	var val any
-	err := cfg.GetValue(ctx, key, &val)
+	val, err := cfg.GetValue(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -142,11 +116,7 @@ func (cfg *simpleConfig) GetConfig(ctx context.Context, key string) (Config, err
 		return nil, ErrConfigMissingValue.New("missing value", "key", key)
 	}
 
-	var mapVal map[string]any
-	var mapErr error
-
-	mapVal, mapErr = GetAsMap(ctx, val)
-
+	mapVal, mapErr := GetAsMap(ctx, val)
 	if mapErr != nil {
 		return nil, mapErr
 	}

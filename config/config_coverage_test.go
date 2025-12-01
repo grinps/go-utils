@@ -112,13 +112,13 @@ func TestSimpleConfig_SetValue(t *testing.T) {
 		t.Errorf("SetValue failed: %v", err)
 	}
 
-	var host string
-	err = cfg.GetValue(ctx, "server.host", &host)
+	val, err := cfg.GetValue(ctx, "server.host")
 	if err != nil {
 		t.Errorf("GetValue failed: %v", err)
 	}
-	if host != "0.0.0.0" {
-		t.Errorf("Expected 0.0.0.0, got %v", host)
+	host, ok := val.(string)
+	if !ok || host != "0.0.0.0" {
+		t.Errorf("Expected 0.0.0.0, got %v", val)
 	}
 
 	// Test nested set
@@ -129,12 +129,12 @@ func TestSimpleConfig_SetValue(t *testing.T) {
 		t.Errorf("SetValue nested failed: %v", err)
 	}
 
-	var val int
-	err = cfg.GetValue(ctx, "nested.deep.value", &val)
+	val, err = cfg.GetValue(ctx, "nested.deep.value")
 	if err != nil {
 		t.Errorf("GetValue failed: %v", err)
 	}
-	if val != 123 {
+	intVal, ok := val.(int)
+	if !ok || intVal != 123 {
 		t.Errorf("Expected 123, got %v", val)
 	}
 }
@@ -143,28 +143,18 @@ func TestSimpleConfig_Errors(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.NewSimpleConfig(ctx)
 
-	var val string
-	err := cfg.GetValue(ctx, "", &val)
+	_, err := cfg.GetValue(ctx, "")
 	if err == nil {
 		t.Error("Expected error for empty key")
-	}
-
-	// Test nil return value
-	err = cfg.GetValue(ctx, "key", nil)
-	if err == nil {
-		t.Error("Expected error for nil return value")
-	}
-
-	// Test non-pointer return value
-	err = cfg.GetValue(ctx, "key", "not a pointer")
-	if err == nil {
-		t.Error("Expected error for non-pointer return value")
 	}
 
 	// Test GetConfig with non-map value
 	err = cfg.(interface {
 		SetValue(context.Context, string, any) error
 	}).SetValue(ctx, "invalid_map", 123)
+	if err != nil {
+		t.Errorf("SetValue failed: %v", err)
+	}
 
 	_, err = cfg.GetConfig(ctx, "invalid_map")
 	if err == nil {
@@ -197,30 +187,23 @@ func TestGetValueTypeSafety(t *testing.T) {
 	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
 
 	// Test correct type
-	var port int
-	err := cfg.GetValue(ctx, "port", &port)
+	val, err := cfg.GetValue(ctx, "port")
 	if err != nil {
 		t.Errorf("GetValue failed: %v", err)
 	}
-	if port != 8080 {
-		t.Errorf("Expected 8080, got %v", port)
-	}
-
-	// Test type mismatch
-	var wrongType string
-	err = cfg.GetValue(ctx, "port", &wrongType)
-	if err == nil {
-		t.Error("Expected error for type mismatch")
+	port, ok := val.(int)
+	if !ok || port != 8080 {
+		t.Errorf("Expected 8080, got %v", val)
 	}
 
 	// Test bool
-	var active bool
-	err = cfg.GetValue(ctx, "active", &active)
+	val, err = cfg.GetValue(ctx, "active")
 	if err != nil {
 		t.Errorf("GetValue failed: %v", err)
 	}
-	if !active {
-		t.Error("Expected true")
+	active, ok := val.(bool)
+	if !ok || !active {
+		t.Errorf("Expected true, got %v", val)
 	}
 }
 
@@ -241,13 +224,13 @@ func TestNestedConfiguration(t *testing.T) {
 	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
 
 	// Test nested access
-	var host string
-	err := cfg.GetValue(ctx, "database.primary.host", &host)
+	val, err := cfg.GetValue(ctx, "database.primary.host")
 	if err != nil {
 		t.Errorf("GetValue failed: %v", err)
 	}
-	if host != "db1.example.com" {
-		t.Errorf("Expected db1.example.com, got %v", host)
+	host, ok := val.(string)
+	if !ok || host != "db1.example.com" {
+		t.Errorf("Expected db1.example.com, got %v", val)
 	}
 
 	// Test GetConfig
@@ -256,13 +239,13 @@ func TestNestedConfiguration(t *testing.T) {
 		t.Errorf("GetConfig failed: %v", err)
 	}
 
-	var port int
-	err = dbCfg.GetValue(ctx, "primary.port", &port)
+	val, err = dbCfg.GetValue(ctx, "primary.port")
 	if err != nil {
 		t.Errorf("GetValue on sub-config failed: %v", err)
 	}
-	if port != 5432 {
-		t.Errorf("Expected 5432, got %v", port)
+	port, ok := val.(int)
+	if !ok || port != 5432 {
+		t.Errorf("Expected 5432, got %v", val)
 	}
 }
 
@@ -291,12 +274,12 @@ func TestCoverageContextConfig(t *testing.T) {
 		t.Error("Expected config from context")
 	}
 
-	var val string
-	err := retrievedCfg.GetValue(ctx, "key", &val)
+	val, err := retrievedCfg.GetValue(ctx, "key")
 	if err != nil {
 		t.Errorf("GetValue failed: %v", err)
 	}
-	if val != "value" {
+	strVal, ok := val.(string)
+	if !ok || strVal != "value" {
 		t.Errorf("Expected 'value', got %v", val)
 	}
 }
@@ -425,12 +408,12 @@ func TestSetValueEdgeCases(t *testing.T) {
 		t.Errorf("SetValue failed: %v", err)
 	}
 
-	var val string
-	err = cfg.GetValue(ctx, "a.b.c.d", &val)
+	val, err := cfg.GetValue(ctx, "a.b.c.d")
 	if err != nil {
 		t.Errorf("GetValue failed: %v", err)
 	}
-	if val != "deep" {
+	strVal, ok := val.(string)
+	if !ok || strVal != "deep" {
 		t.Errorf("Expected 'deep', got %v", val)
 	}
 
@@ -455,8 +438,7 @@ func TestGetValueEdgeCases(t *testing.T) {
 
 	// Test with nil config
 	var nilCfg config.SimpleConfig
-	var val string
-	err := nilCfg.GetValue(ctx, "key", &val)
+	_, err := nilCfg.GetValue(ctx, "key")
 	if err == nil {
 		t.Error("Expected error for nil config")
 	}
@@ -468,7 +450,7 @@ func TestGetValueEdgeCases(t *testing.T) {
 		},
 	}))
 
-	err = cfg.GetValue(ctx, "parent.child.grandchild", &val)
+	_, err = cfg.GetValue(ctx, "parent.child.grandchild")
 	if err == nil {
 		t.Error("Expected error for nil intermediate value")
 	}
@@ -478,7 +460,7 @@ func TestGetValueEdgeCases(t *testing.T) {
 		"scalar": "value",
 	}))
 
-	err = cfg2.GetValue(ctx, "scalar.nested", &val)
+	_, err = cfg2.GetValue(ctx, "scalar.nested")
 	if err == nil {
 		t.Error("Expected error for non-map intermediate value")
 	}
@@ -517,18 +499,153 @@ func TestCustomDelimiter(t *testing.T) {
 		config.WithConfigurationMap(data),
 		config.WithDelimiter("/"))
 
-	var port int
-	err := cfg.GetValue(ctx, "server/port", &port)
+	val, err := cfg.GetValue(ctx, "server/port")
 	if err != nil {
 		t.Errorf("GetValue with custom delimiter failed: %v", err)
 	}
-	if port != 8080 {
-		t.Errorf("Expected 8080, got %v", port)
+	port, ok := val.(int)
+	if !ok || port != 8080 {
+		t.Errorf("Expected 8080, got %v", val)
 	}
 
 	// Test that dot notation doesn't work with custom delimiter
-	err = cfg.GetValue(ctx, "server.port", &port)
+	_, err = cfg.GetValue(ctx, "server.port")
 	if err == nil {
 		t.Error("Expected error when using wrong delimiter")
+	}
+}
+
+func TestUnmarshalFunctions(t *testing.T) {
+	ctx := context.Background()
+
+	// Test Unmarshal with non-MarshableConfig
+	simpleCfg := config.NewSimpleConfig(ctx)
+	ctxWithCfg := config.ContextWithConfig(ctx, simpleCfg)
+
+	type TestStruct struct {
+		Name string `config:"name"`
+	}
+	var ts TestStruct
+	err := config.Unmarshal(ctxWithCfg, "test", &ts)
+	if err == nil {
+		t.Error("Expected error for non-MarshableConfig")
+	}
+
+	// Test UnmarshalWithConfig with nil config
+	err = config.UnmarshalWithConfig(ctx, nil, "test", &ts)
+	if err == nil {
+		t.Error("Expected error for nil config")
+	}
+
+	// Test UnmarshalWithConfig with non-pointer
+	err = config.UnmarshalWithConfig[TestStruct](ctx, simpleCfg, "test", &ts)
+	if err == nil {
+		t.Error("Expected error for non-MarshableConfig")
+	}
+
+	// Test UnmarshalWithConfig with nil target
+	err = config.UnmarshalWithConfig[TestStruct](ctx, simpleCfg, "test", nil)
+	if err == nil {
+		t.Error("Expected error for nil target")
+	}
+
+	// Test UnmarshalWithConfig with non-struct pointer
+	var num int
+	err = config.UnmarshalWithConfig(ctx, simpleCfg, "test", &num)
+	if err == nil {
+		t.Error("Expected error for non-struct pointer")
+	}
+}
+
+func TestSetValueFunctions(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.NewSimpleConfig(ctx)
+	ctxWithCfg := config.ContextWithConfig(ctx, cfg)
+
+	// Test SetValue
+	err := config.SetValue(ctxWithCfg, "test.key", "value")
+	if err != nil {
+		t.Errorf("SetValue failed: %v", err)
+	}
+
+	val, err := cfg.GetValue(ctx, "test.key")
+	if err != nil {
+		t.Errorf("GetValue failed: %v", err)
+	}
+	strVal, ok := val.(string)
+	if !ok || strVal != "value" {
+		t.Errorf("Expected 'value', got %v", val)
+	}
+
+	// Test SetValueWithConfig with nil config
+	err = config.SetValueWithConfig(ctx, nil, "key", "value")
+	if err == nil {
+		t.Error("Expected error for nil config")
+	}
+
+	// Test SetValueWithConfig with empty key
+	err = config.SetValueWithConfig(ctx, cfg, "", "value")
+	if err == nil {
+		t.Error("Expected error for empty key")
+	}
+
+	// Test SetValueWithConfig
+	err = config.SetValueWithConfig(ctx, cfg, "another.key", 123)
+	if err != nil {
+		t.Errorf("SetValueWithConfig failed: %v", err)
+	}
+
+	val, err = cfg.GetValue(ctx, "another.key")
+	if err != nil {
+		t.Errorf("GetValue failed: %v", err)
+	}
+	intVal, ok := val.(int)
+	if !ok || intVal != 123 {
+		t.Errorf("Expected 123, got %v", val)
+	}
+}
+
+func TestMustUnmarshal(t *testing.T) {
+	ctx := context.Background()
+	simpleCfg := config.NewSimpleConfig(ctx)
+	ctxWithCfg := config.ContextWithConfig(ctx, simpleCfg)
+
+	type TestStruct struct {
+		Name string `config:"name"`
+	}
+
+	// Test MustUnmarshal with error - should panic
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected panic for MustUnmarshal with non-MarshableConfig")
+		}
+	}()
+
+	var ts TestStruct
+	config.MustUnmarshal(ctxWithCfg, "test", &ts)
+}
+
+func TestGetValueENilValue(t *testing.T) {
+	ctx := context.Background()
+	data := map[string]any{
+		"key": nil,
+	}
+	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+	ctxWithCfg := config.ContextWithConfig(ctx, cfg)
+
+	var val string
+	err := config.GetValueE(ctxWithCfg, "key", &val)
+	if err == nil {
+		t.Error("Expected error for nil value")
+	}
+}
+
+func TestSetValueNilConfig(t *testing.T) {
+	ctx := context.Background()
+	var nilCfg config.SimpleConfig
+
+	err := nilCfg.SetValue(ctx, "key", "value")
+	if err == nil {
+		t.Error("Expected error for nil config")
 	}
 }

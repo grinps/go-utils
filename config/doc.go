@@ -23,17 +23,16 @@
 //
 // # Retrieving Values
 //
-// The package provides a single primary function GetValueE that uses pointer-based
-// assignment for type safety:
+// The package provides two approaches for retrieving values:
 //
-//	// Direct config method
-//	var port int
-//	err := cfg.GetValue(ctx, "server.port", &port)
+//	// Direct config method - returns (any, error)
+//	val, err := cfg.GetValue(ctx, "server.port")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
+//	port := val.(int) // Type assertion required
 //
-//	// Package-level function (recommended)
+//	// Package-level function with type safety (recommended)
 //	var host string
 //	err = config.GetValueE(ctx, "server.host", &host)
 //	if err != nil {
@@ -57,23 +56,22 @@
 // Access nested values using dot notation or retrieve sub-configurations:
 //
 //	// Dot notation
-//	var dbHost string
-//	cfg.GetValue(ctx, "database.host", &dbHost)
+//	val, err := cfg.GetValue(ctx, "database.host")
+//	dbHost := val.(string)
 //
 //	// Sub-configuration
 //	dbCfg, err := cfg.GetConfig(ctx, "database")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-//	var host string
-//	dbCfg.GetValue(ctx, "host", &host)
+//	val, err = dbCfg.GetValue(ctx, "host")
+//	host := val.(string)
 //
 // # Error Handling
 //
 // The package uses the errext package for structured error handling with error codes:
 //
-//	var port int
-//	err := cfg.GetValue(ctx, "missing.key", &port)
+//	val, err := cfg.GetValue(ctx, "missing.key")
 //	if err != nil {
 //	    // Check specific error types
 //	    if errors.Is(err, config.ErrConfigMissingValue) {
@@ -95,12 +93,17 @@
 //
 // # Type Safety
 //
-// The package ensures type safety at runtime using reflection. Type mismatches
-// result in clear error messages:
+// The GetValue method returns any and requires type assertion. For type-safe
+// retrieval with compile-time guarantees, use GetValueE:
 //
-//	var wrongType string
-//	err := cfg.GetValue(ctx, "server.port", &wrongType) // port is int
-//	// Returns: ErrConfigInvalidValueType with details
+//	// Type assertion required
+//	val, _ := cfg.GetValue(ctx, "server.port")
+//	port := val.(int)
+//
+//	// Type-safe with GetValueE
+//	var port int
+//	err := config.GetValueE(ctx, "server.port", &port)
+//	// Returns: ErrConfigInvalidValueType if types don't match
 //
 // # Custom Delimiters
 //
@@ -109,8 +112,8 @@
 //	cfg := config.NewSimpleConfig(ctx,
 //	    config.WithConfigurationMap(data),
 //	    config.WithDelimiter("/"))
-//	var port int
-//	cfg.GetValue(ctx, "server/port", &port)
+//	val, err := cfg.GetValue(ctx, "server/port")
+//	port := val.(int)
 //
 // # Context Integration
 //
