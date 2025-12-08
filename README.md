@@ -15,6 +15,7 @@ The `base-utils` library provides a set of well-tested, production-ready utiliti
 - **Generic Registry** - Type-safe registry with comparable keys
 - **Extended Error Handling** - Structured error generation, categorization, and templating
 - **Configuration Management** - Flexible, context-aware configuration management with extensions for struct unmarshalling, mutable configs, context-based config discovery, and koanf integration for multi-source configuration loading
+- **Telemetry** - Vendor-agnostic observability API for distributed tracing and metrics collection
 
 ## Installation
 
@@ -707,6 +708,110 @@ func main() {
 
 ---
 
+### 11. Telemetry Package
+
+**Import:** `github.com/grinps/go-utils/telemetry`
+
+A vendor-agnostic API for application observability including distributed tracing and metrics collection.
+
+#### Features
+- **Provider Interface** - Entry point for creating Tracers and Meters
+- **Distributed Tracing** - Span-based tracing with context propagation
+- **Metrics Collection** - Counter and Recorder instruments for metrics
+- **Context Integration** - Store and retrieve providers from context
+- **Default Provider** - NoopProvider for graceful degradation
+- **Error Handling Strategy** - Configurable error handling for testing
+- **Thread Safe** - All interfaces designed for concurrent use
+
+#### Core Interfaces
+
+```go
+// Provider - Entry point for telemetry
+type Provider interface {
+    Tracer(name string, opts ...any) (Tracer, error)
+    Meter(name string, opts ...any) (Meter, error)
+    Shutdown(ctx context.Context) error
+}
+
+// Tracer - Creates spans for distributed tracing
+type Tracer interface {
+    Start(ctx context.Context, name string, opts ...any) (context.Context, Span)
+}
+
+// Span - Represents a unit of work
+type Span interface {
+    End(opts ...any)
+    IsRecording() bool
+    SetAttributes(attrs ...any)
+    AddEvent(name string, opts ...any)
+    RecordError(err error, opts ...any)
+    SetStatus(code int, description string)
+    SetName(name string)
+    TracerProvider() Provider
+}
+
+// Meter - Creates metric instruments
+type Meter interface {
+    NewInstrument(name string, opts ...any) (Instrument, error)
+}
+```
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/telemetry"
+)
+
+func main() {
+    // Get the default provider (NoopProvider)
+    provider := telemetry.Default()
+
+    // Create a tracer
+    tracer, _ := provider.Tracer("my-service")
+
+    // Start a span
+    ctx, span := tracer.Start(context.Background(), "operation")
+    defer span.End()
+
+    // Add attributes and events
+    span.SetAttributes("user.id", "12345")
+    span.AddEvent("processing-started")
+
+    // Create a meter and instrument
+    meter, _ := provider.Meter("my-service")
+    counter, _ := meter.NewInstrument("requests_total",
+        telemetry.InstrumentTypeCounter,
+        telemetry.CounterTypeMonotonic,
+    )
+}
+```
+
+#### Context Propagation
+
+```go
+// Store provider in context
+ctx := telemetry.ContextWithTelemetry(ctx, provider)
+
+// Retrieve provider from context (falls back to Default)
+provider := telemetry.ContextTelemetry(ctx)
+
+// Convenience functions
+tracer, _ := telemetry.NewTracer(ctx, "my-service")
+meter, _ := telemetry.NewMeter(ctx, "my-service")
+```
+
+#### Key Functions
+- `Default()` - Returns the default provider (NoopProvider)
+- `AsDefault(provider)` - Sets a custom default provider
+- `ContextWithTelemetry(ctx, provider)` - Stores provider in context
+- `ContextTelemetry(ctx)` - Retrieves provider from context
+- `NewTracer(ctx, name, opts...)` - Gets tracer from context's provider
+- `NewMeter(ctx, name, opts...)` - Gets meter from context's provider
+
+---
+
 ## Testing
 
 All packages include comprehensive test coverage:
@@ -727,6 +832,7 @@ go test ./platform/...
 - **Platform Package**: 93.2%
 - **Config Package**: 93.3%
 - **Config Ext Package**: 96.4%
+- **Telemetry Package**: 100%
 - **System Package**: Comprehensive unit tests
 - **GoSub Package**: Selection and event tests
 - **Registry Package**: Generic type tests
@@ -802,6 +908,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | **config** | Configuration management | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config) |
 | **config/ext** | Config extensions (ConfigWrapper) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/ext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/ext) |
 | **config/koanf** | Koanf wrapper for Config interfaces | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/koanf.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/koanf) |
+| **telemetry** | Observability API (tracing & metrics) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry) |
 
 ---
 
@@ -820,6 +927,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | `config` | Configuration | `Config`, `MutableConfig`, `MarshableConfig` |
 | `config/ext` | Config extensions |  `ConfigWrapper` |
 | `config/koanf` | Koanf wrapper | `KoanfConfig` |
+| `telemetry` | Observability | `Provider`, `Tracer`, `Meter` |
 
 ---
 
@@ -987,7 +1095,27 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 
 ---
 
+### Telemetry Package
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/telemetry/v0.1.0) (December 2025)
+- ✅ **Initial Release** - Vendor-agnostic observability API
+- ✅ **Provider Interface** - Entry point for creating Tracers and Meters with shutdown support
+- ✅ **Tracer Interface** - Span-based distributed tracing with context propagation
+- ✅ **Span Interface** - Full span lifecycle with attributes, events, errors, and status
+- ✅ **Meter Interface** - Instrument creation for metrics collection
+- ✅ **Instrument Types** - Counter (monotonic/up-down) and Recorder (gauge/histogram)
+- ✅ **NoopProvider** - Default no-op implementation for graceful degradation
+- ✅ **Context Integration** - Store and retrieve providers via context
+- ✅ **Convenience Functions** - `NewTracer` and `NewMeter` for quick access
+- ✅ **Error Handling Strategy** - Configurable error handling for testing scenarios
+- ✅ **Structured Errors** - Uses `errext` package for rich error information
+- ✅ **100% Test Coverage** - Comprehensive test suite
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry)
+
+---
+
 **Version:** 1.0.0  
-**Last Updated:** November 2025
+**Last Updated:** December 2025
 
 
