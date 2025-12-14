@@ -35,51 +35,51 @@
 //	// Store provider in context
 //	ctx := telemetry.ContextWithTelemetry(ctx, provider)
 //
-//	// Retrieve provider from context (falls back to Default)
-//	provider := telemetry.ContextTelemetry(ctx)
+//	// Retrieve provider from context (second param controls default fallback)
+//	provider := telemetry.ContextTelemetry(ctx, true)  // falls back to Default()
+//	provider := telemetry.ContextTelemetry(ctx, false) // returns nil if not found
 //
-// # Convenience Functions
+// # Context-Based Tracer and Meter Access
 //
-// Helper functions for quick access to tracers and meters:
+// Tracers and meters can also be stored in and retrieved from context:
 //
-//	// Get a tracer using context's provider
-//	tracer, _ := telemetry.NewTracer(ctx, "my-service")
+//	// Store and retrieve tracer
+//	ctx = telemetry.ContextWithTracer(ctx, tracer)
+//	tracer := telemetry.ContextTracer(ctx, true)       // falls back to noop
+//	tracer, err := telemetry.ContextTracerE(ctx, true) // returns error on failure
 //
-//	// Get a meter using context's provider
-//	meter, _ := telemetry.NewMeter(ctx, "my-service")
+//	// Store and retrieve meter
+//	ctx = telemetry.ContextWithMeter(ctx, meter)
+//	meter := telemetry.ContextMeter(ctx, true)         // falls back to noop
+//	meter, err := telemetry.ContextMeterE(ctx, true)   // returns error on failure
+//
+// # Generic Instrument Creation
+//
+// Create type-safe instruments using the generic NewInstrument function:
+//
+//	counter, err := telemetry.NewInstrument[telemetry.Counter[int64]](ctx, "requests",
+//	    telemetry.InstrumentTypeCounter, telemetry.CounterTypeMonotonic)
 //
 // # Basic Usage
 //
-// Create a provider and use it to instrument your application:
-//
-//	// Get a tracer from the provider
-//	tracer, err := provider.Tracer("my-service")
-//	if err != nil {
-//	    // handle error
-//	}
+// Create a span from context tracer and use it to instrument your application:
 //
 //	// Start a span
-//	ctx, span := tracer.Start(ctx, "operation-name")
+//	ctx, span := telemetry.ContextTracer(ctx, true).Start(ctx, "operation-name")
 //	defer span.End()
 //
 //	// Add attributes
 //	span.SetAttributes("key", "value")
 //
-//	// Get a meter for metrics
-//	meter, err := provider.Meter("my-service")
-//	if err != nil {
-//	    // handle error
-//	}
-//
 //	// Create an instrument
-//	instrument, _ := meter.NewInstrument("requests_total")
+//	instrument, _ := telemetry.ContextMeter(ctx, true).NewInstrument("requests_total", telemetry.InstrumentTypeCounter, telemetry.CounterTypeMonotonic)
 //
 // # Context Propagation
 //
 // The package uses Go's context.Context for span propagation:
 //
 //	func handleRequest(ctx context.Context) {
-//	    ctx, span := tracer.Start(ctx, "handle-request")
+//	    ctx, span := telemetry.ContextTracer(ctx, true).Start(ctx, "handle-request")
 //	    defer span.End()
 //
 //	    // Child spans automatically inherit parent context

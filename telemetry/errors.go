@@ -26,6 +26,10 @@ const (
 	ErrParamAggregationStrategy = "aggregationStrategy"
 	// ErrParamOption is the parameter name for options.
 	ErrParamOption = "option"
+	// ErrParamExpectedType is the parameter name for expected type of an entity.
+	ErrParamExpectedType = "expected_type"
+	// ErrParamActualType is the parameter name for actual type of an entity.
+	ErrParamActualType = "actual_type"
 )
 
 // Common error reasons.
@@ -48,6 +52,8 @@ const (
 	ErrReasonAlreadyShutdown = "provider already shutdown"
 	// ErrReasonNotInitialized indicates the component was not initialized.
 	ErrReasonNotInitialized = "not initialized"
+	// ErrReasonNewInstrumentFailed indicates a new instrument creation failed.
+	ErrReasonNewInstrumentFailed = "failed to create instrument"
 	// ErrReasonInstrumentExists indicates an instrument with the same name already exists.
 	ErrReasonInstrumentExists = "instrument with same name already exists with different configuration"
 	// ErrReasonInvalidInstrumentType indicates an invalid instrument type was provided.

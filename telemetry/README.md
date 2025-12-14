@@ -61,8 +61,8 @@ func main() {
 }
 
 func doWork(ctx context.Context) {
-    // Get tracer from context
-    tracer, _ := telemetry.NewTracer(ctx, "my-service")
+    // Get tracer from context (falls back to default provider's tracer)
+    tracer := telemetry.ContextTracer(ctx, true)
     
     // Child span automatically inherits parent context
     ctx, span := tracer.Start(ctx, "do-work")
@@ -92,7 +92,7 @@ func main() {
     }
 
     // Create a counter instrument
-    counter, err := meter.NewInstrument("requests_total",
+    counter, err := meter.NewInstrument[telemetry.Counter[int64]]("requests_total",
         telemetry.InstrumentTypeCounter,
         telemetry.CounterTypeMonotonic,
     )
@@ -101,9 +101,7 @@ func main() {
     }
 
     // Use the counter
-    if c, ok := counter.(telemetry.Counter[int64]); ok {
-        c.Add(context.Background(), 1)
-    }
+    c.Add(context.Background(), 1)
 }
 ```
 
@@ -125,18 +123,31 @@ telemetry.AsDefault(myProvider)
 
 ## Context Propagation
 
-Providers can be stored in and retrieved from context for easy access throughout your application:
+Providers, tracers, and meters can be stored in and retrieved from context for easy access throughout your application:
 
 ```go
 // Store provider in context
 ctx := telemetry.ContextWithTelemetry(ctx, provider)
 
-// Retrieve provider from context (falls back to Default)
-provider := telemetry.ContextTelemetry(ctx)
+// Retrieve provider from context (second param controls default fallback)
+provider := telemetry.ContextTelemetry(ctx, true)  // falls back to Default()
+provider := telemetry.ContextTelemetry(ctx, false) // returns nil if not found
 
-// Convenience functions
-tracer, err := telemetry.NewTracer(ctx, "my-service")
-meter, err := telemetry.NewMeter(ctx, "my-service")
+// Store and retrieve tracer from context
+ctx = telemetry.ContextWithTracer(ctx, tracer)
+tracer := telemetry.ContextTracer(ctx, true)       // falls back to noop tracer
+tracer, err := telemetry.ContextTracerE(ctx, true) // returns error if provider fails
+
+// Store and retrieve meter from context
+ctx = telemetry.ContextWithMeter(ctx, meter)
+meter := telemetry.ContextMeter(ctx, true)         // falls back to noop meter
+meter, err := telemetry.ContextMeterE(ctx, true)   // returns error if provider fails
+
+// Create instrument using context's meter
+counter, err := telemetry.NewInstrument[telemetry.Counter[int64]](ctx, "requests_total",
+    telemetry.InstrumentTypeCounter,
+    telemetry.CounterTypeMonotonic,
+)
 ```
 
 ## Instrument Types
@@ -147,13 +158,13 @@ Counters are for values that only increase (monotonic) or can increase and decre
 
 ```go
 // Monotonic counter (only increases)
-counter, _ := meter.NewInstrument("requests_total",
+counter, _ := meter.NewInstrument[telemetry.Counter[int64]]("requests_total",
     telemetry.InstrumentTypeCounter,
     telemetry.CounterTypeMonotonic,
 )
 
 // Up-down counter (can increase or decrease)
-updown, _ := meter.NewInstrument("active_connections",
+updown, _ := meter.NewInstrument[telemetry.Counter[int64]]("active_connections",
     telemetry.InstrumentTypeCounter,
     telemetry.CounterTypeUpDown,
 )
@@ -165,13 +176,13 @@ Recorders are for point-in-time values (gauges) or aggregated distributions (his
 
 ```go
 // Gauge (point-in-time value, no aggregation)
-gauge, _ := meter.NewInstrument("temperature",
+gauge, _ := meter.NewInstrument[telemetry.Recorder[int64]]("temperature",
     telemetry.InstrumentTypeRecorder,
     telemetry.AggregationStrategyNone,
 )
 
 // Histogram (aggregated distribution)
-histogram, _ := meter.NewInstrument("request_duration",
+histogram, _ := meter.NewInstrument[telemetry.Recorder[int64]]("request_duration",
     telemetry.InstrumentTypeRecorder,
     telemetry.AggregationStrategyHistogram,
 )
@@ -200,7 +211,7 @@ For testing purposes, you can control error behavior:
 tracer, err := provider.Tracer("test", telemetry.ErrorHandlingStrategyGenerateError)
 
 // Return errors instead of ignoring them
-inst, err := meter.NewInstrument("test", 
+inst, err := meter.NewInstrument[telemetry.Counter[int64]]("test", 
     telemetry.InstrumentTypeCounter,
     telemetry.ErrorHandlingStrategyReturn,
 )
@@ -214,35 +225,6 @@ This package provides interfaces and a `NoopProvider`. Additional implementation
 |---------|-------------|
 | `telemetry/memory` | In-memory implementation for testing |
 | `telemetry/otel` | OpenTelemetry-based implementation for production |
-
-### Using the Memory Provider (Testing)
-
-```go
-import "github.com/grinps/go-utils/telemetry/memory"
-
-provider := memory.NewProvider()
-telemetry.AsDefault(provider)
-
-// After operations, inspect recorded data
-spans := provider.RecordedSpans()
-```
-
-### Using the OpenTelemetry Provider (Production)
-
-```go
-import "github.com/grinps/go-utils/telemetry/otel"
-
-provider, err := otel.NewProvider(ctx,
-    otel.WithServiceName("my-service"),
-    otel.WithOTLPEndpoint("localhost:4317"),
-)
-if err != nil {
-    panic(err)
-}
-defer provider.Shutdown(ctx)
-
-telemetry.AsDefault(provider)
-```
 
 ## Thread Safety
 
