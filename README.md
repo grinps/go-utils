@@ -794,21 +794,34 @@ func main() {
 // Store provider in context
 ctx := telemetry.ContextWithTelemetry(ctx, provider)
 
-// Retrieve provider from context (falls back to Default)
-provider := telemetry.ContextTelemetry(ctx)
+// Retrieve provider from context (second param controls fallback)
+provider := telemetry.ContextTelemetry(ctx, true)  // falls back to Default()
+provider := telemetry.ContextTelemetry(ctx, false) // returns nil if not found
 
-// Convenience functions
-tracer, _ := telemetry.NewTracer(ctx, "my-service")
-meter, _ := telemetry.NewMeter(ctx, "my-service")
+// Store and retrieve tracer/meter from context
+ctx = telemetry.ContextWithTracer(ctx, tracer)
+tracer := telemetry.ContextTracer(ctx, true)       // falls back to noop
+
+ctx = telemetry.ContextWithMeter(ctx, meter)
+meter := telemetry.ContextMeter(ctx, true)         // falls back to noop
+
+// Create type-safe instrument from context's meter
+counter, err := telemetry.NewInstrument[telemetry.Counter[int64]](ctx, "requests",
+    telemetry.InstrumentTypeCounter, telemetry.CounterTypeMonotonic)
 ```
 
 #### Key Functions
 - `Default()` - Returns the default provider (NoopProvider)
 - `AsDefault(provider)` - Sets a custom default provider
 - `ContextWithTelemetry(ctx, provider)` - Stores provider in context
-- `ContextTelemetry(ctx)` - Retrieves provider from context
-- `NewTracer(ctx, name, opts...)` - Gets tracer from context's provider
-- `NewMeter(ctx, name, opts...)` - Gets meter from context's provider
+- `ContextTelemetry(ctx, defaultIfNotAvailable)` - Retrieves provider from context
+- `ContextWithTracer(ctx, tracer)` - Stores tracer in context
+- `ContextTracer(ctx, defaultIfNotAvailable)` - Retrieves tracer from context
+- `ContextTracerE(ctx, defaultIfNotAvailable)` - Retrieves tracer with error handling
+- `ContextWithMeter(ctx, meter)` - Stores meter in context
+- `ContextMeter(ctx, defaultIfNotAvailable)` - Retrieves meter from context
+- `ContextMeterE(ctx, defaultIfNotAvailable)` - Retrieves meter with error handling
+- `NewInstrument[T](ctx, name, opts...)` - Creates type-safe instrument from context's meter
 
 ---
 
@@ -1097,6 +1110,15 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 
 ### Telemetry Package
 
+#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/telemetry/v0.2.0) (December 2025)
+- ✅ **Context Tracer/Meter Functions** - `ContextWithTracer`, `ContextTracer`, `ContextTracerE` for tracer context propagation
+- ✅ **Context Meter Functions** - `ContextWithMeter`, `ContextMeter`, `ContextMeterE` for meter context propagation
+- ✅ **Generic NewInstrument** - Type-safe `NewInstrument[T]` for creating instruments with compile-time type checking
+- ✅ **ContextTelemetry Update** - Added `defaultIfNotAvailable` boolean parameter for explicit fallback control
+- 🔧 **Removed NewTracer/NewMeter** - Replaced by `ContextTracerE` and `ContextMeterE` functions
+- 🐛 **Fixed nil pointer dereference** - Fixed reflection panic in `NewInstrument` type mismatch error
+- 🔧 **Removed dead code** - Cleaned up unreachable fallback paths in context functions
+
 #### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/telemetry/v0.1.0) (December 2025)
 - ✅ **Initial Release** - Vendor-agnostic observability API
 - ✅ **Provider Interface** - Entry point for creating Tracers and Meters with shutdown support
@@ -1106,7 +1128,6 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 - ✅ **Instrument Types** - Counter (monotonic/up-down) and Recorder (gauge/histogram)
 - ✅ **NoopProvider** - Default no-op implementation for graceful degradation
 - ✅ **Context Integration** - Store and retrieve providers via context
-- ✅ **Convenience Functions** - `NewTracer` and `NewMeter` for quick access
 - ✅ **Error Handling Strategy** - Configurable error handling for testing scenarios
 - ✅ **Structured Errors** - Uses `errext` package for rich error information
 - ✅ **100% Test Coverage** - Comprehensive test suite
