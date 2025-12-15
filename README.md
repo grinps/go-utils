@@ -825,6 +825,93 @@ counter, err := telemetry.NewInstrument[telemetry.Counter[int64]](ctx, "requests
 
 ---
 
+### 12. Telemetry Memory Package
+
+**Import:** `github.com/grinps/go-utils/telemetry/memory`
+
+An in-memory implementation of the telemetry interfaces for testing and development.
+
+#### Features
+- **Full Interface Implementation** - Implements Provider, Tracer, Span, and Meter interfaces
+- **Test Assertions** - Access recorded spans and metrics for test verification
+- **Thread Safe** - All operations are safe for concurrent use
+- **Span Relationships** - Support for parent-child span relationships
+- **Generic Instruments** - Counter[T] and Recorder[T] implementations
+- **Key-Value Options** - Minimal dependency usage with string key-value pairs
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/telemetry"
+    "github.com/grinps/go-utils/telemetry/memory"
+)
+
+func TestMyService(t *testing.T) {
+    // Create in-memory provider
+    provider := memory.NewProvider()
+    defer provider.Shutdown(context.Background())
+
+    // Create tracer and span
+    tracer, _ := provider.Tracer("test-service")
+    ctx, span := tracer.Start(context.Background(), "operation")
+    span.SetAttributes("user.id", "12345")  // Key-value pairs
+    span.End()
+
+    // Assert on recorded spans
+    spans := provider.RecordedSpans()
+    if len(spans) != 1 {
+        t.Fatalf("expected 1 span, got %d", len(spans))
+    }
+    if !spans[0].HasAttribute("user.id") {
+        t.Error("expected user.id attribute")
+    }
+
+    // Create meter and instrument
+    meter, _ := provider.Meter("test-service")
+    inst, _ := meter.NewInstrument("requests",
+        telemetry.InstrumentTypeCounter,
+        telemetry.CounterTypeMonotonic,
+    )
+    counter := inst.(telemetry.Counter[int64])
+    counter.Add(ctx, 1, "method", "GET")  // Key-value attributes
+
+    // Assert on recorded metrics
+    m := meter.(*memory.Meter)
+    measurements := m.RecordedMeasurements()
+    if len(measurements) != 1 {
+        t.Fatalf("expected 1 measurement, got %d", len(measurements))
+    }
+}
+```
+
+#### Minimal Dependency Usage
+
+Pass options as key-value pairs to avoid importing memory package types:
+
+```go
+// Tracer/Meter with version and custom attributes
+tracer, _ := provider.Tracer("my-service", 
+    "version", "1.0.0",
+    "service.env", "production",
+)
+
+// Instrument attributes as key-value pairs
+counter.Add(ctx, 1, "user.id", "12345", "request.size", 1024)
+span.AddEvent("cache-hit", "cache.key", "user:123")
+```
+
+#### Key Types
+- `Provider` - In-memory telemetry provider with recorded data access
+- `RecordedSpan` - Captured span data with assertion helpers
+- `RecordedMeasurement` - Captured metric measurement
+- `Meter` - In-memory meter with measurement recording
+- `Counter[T]` - Generic counter instrument
+- `Recorder[T]` - Generic recorder instrument
+
+---
+
 ## Testing
 
 All packages include comprehensive test coverage:
@@ -846,6 +933,7 @@ go test ./platform/...
 - **Config Package**: 93.3%
 - **Config Ext Package**: 96.4%
 - **Telemetry Package**: 100%
+- **Telemetry Memory Package**: 97.6%
 - **System Package**: Comprehensive unit tests
 - **GoSub Package**: Selection and event tests
 - **Registry Package**: Generic type tests
@@ -922,6 +1010,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | **config/ext** | Config extensions (ConfigWrapper) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/ext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/ext) |
 | **config/koanf** | Koanf wrapper for Config interfaces | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/koanf.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/koanf) |
 | **telemetry** | Observability API (tracing & metrics) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry) |
+| **telemetry/memory** | In-memory telemetry for testing | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/memory.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/memory) |
 
 ---
 
@@ -941,6 +1030,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | `config/ext` | Config extensions |  `ConfigWrapper` |
 | `config/koanf` | Koanf wrapper | `KoanfConfig` |
 | `telemetry` | Observability | `Provider`, `Tracer`, `Meter` |
+| `telemetry/memory` | In-memory telemetry | `Provider`, `RecordedSpan`, `Meter` |
 
 ---
 
@@ -1133,6 +1223,24 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 - ✅ **100% Test Coverage** - Comprehensive test suite
 
 **Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry)
+
+---
+
+### Telemetry Memory Package
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/telemetry/memory/v0.1.0) (December 2025)
+- ✅ **Initial Release** - In-memory telemetry implementation for testing
+- ✅ **Provider Implementation** - Full `telemetry.Provider` interface with recorded data access
+- ✅ **Tracer & Span** - Complete tracing with parent-child relationships
+- ✅ **Meter & Instruments** - Generic `Counter[T]` and `Recorder[T]` implementations
+- ✅ **RecordedSpan** - Test assertion helpers (`HasAttribute`, `GetAttribute`, `HasEvent`, `Duration`)
+- ✅ **RecordedMeasurement** - Access to recorded metric values and attributes
+- ✅ **Key-Value Options** - Minimal dependency usage with string key-value pairs for options and attributes
+- ✅ **Thread Safe** - All operations safe for concurrent use
+- ✅ **NoopProvider Fallback** - Returns noop tracer/meter after shutdown
+- ✅ **97.6% Test Coverage** - Comprehensive test suite
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/memory.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/memory)
 
 ---
 
