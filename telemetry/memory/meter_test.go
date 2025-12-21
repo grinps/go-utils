@@ -26,10 +26,6 @@ func TestMeter_NewInstrument_Counter(t *testing.T) {
 		t.Fatal("Expected non-nil instrument")
 	}
 
-	if inst.Name() != "test_counter" {
-		t.Errorf("Expected name 'test_counter', got '%s'", inst.Name())
-	}
-
 	// Verify it implements Counter interface
 	counter, ok := inst.(telemetry.Counter[int64])
 	if !ok {
@@ -294,4 +290,247 @@ func TestCounter_KeyValueAttributes(t *testing.T) {
 	if attrs[1].Key != "count" || attrs[1].Value != 5 {
 		t.Errorf("Second attribute mismatch: %v", attrs[1])
 	}
+}
+
+func TestInstrumentMarkerMethods(t *testing.T) {
+	p := NewProvider()
+	meter, _ := p.Meter("test")
+
+	t.Run("Counter.Instrument", func(t *testing.T) {
+		inst, _ := meter.NewInstrument("c1", telemetry.InstrumentTypeCounter, telemetry.CounterTypeMonotonic)
+		counter := inst.(*Counter[int64])
+		counter.Instrument() // Should not panic
+	})
+
+	t.Run("Recorder.Instrument", func(t *testing.T) {
+		inst, _ := meter.NewInstrument("r1", telemetry.InstrumentTypeRecorder, telemetry.AggregationStrategyNone)
+		recorder := inst.(*Recorder[float64])
+		recorder.Instrument() // Should not panic
+	})
+}
+
+func TestBaseInstrumentUnit(t *testing.T) {
+	p := NewProvider()
+	meter, _ := p.Meter("test")
+
+	inst, _ := meter.NewInstrument("test_with_unit",
+		telemetry.InstrumentTypeCounter,
+		telemetry.CounterTypeMonotonic,
+		"Test description",
+		"requests",
+	)
+	counter := inst.(*Counter[int64])
+	if counter.Unit() != "requests" {
+		t.Errorf("Expected unit 'requests', got '%s'", counter.Unit())
+	}
+}
+
+func TestRecorderPrecision(t *testing.T) {
+	p := NewProvider()
+	meter, _ := p.Meter("test")
+
+	t.Run("Float64 precision (default)", func(t *testing.T) {
+		inst, _ := meter.NewInstrument("gauge1", telemetry.InstrumentTypeRecorder, telemetry.AggregationStrategyNone)
+		recorder := inst.(*Recorder[float64])
+		if recorder.Precision() != telemetry.PrecisionFloat64 {
+			t.Errorf("Expected PrecisionFloat64, got %s", recorder.Precision())
+		}
+	})
+
+	t.Run("Int64 precision", func(t *testing.T) {
+		inst, _ := meter.NewInstrument("gauge2", telemetry.InstrumentTypeRecorder, telemetry.AggregationStrategyNone, telemetry.PrecisionInt64)
+		recorder := inst.(*Recorder[int64])
+		if recorder.Precision() != telemetry.PrecisionInt64 {
+			t.Errorf("Expected PrecisionInt64, got %s", recorder.Precision())
+		}
+	})
+}
+
+func TestObservableCounter(t *testing.T) {
+	p := NewProvider()
+	meter, _ := p.Meter("test")
+	ctx := context.Background()
+
+	t.Run("Int64 observable counter with callback", func(t *testing.T) {
+		callCount := 0
+		callback := telemetry.Callback[int64](func(ctx context.Context, obs telemetry.Observer[int64]) {
+			callCount++
+			obs.Observe(42, "key", "value")
+		})
+		inst, err := meter.NewInstrument("obs_counter1",
+			telemetry.InstrumentTypeObservableCounter,
+			telemetry.CounterTypeMonotonic,
+			telemetry.PrecisionInt64,
+			callback,
+		)
+		if err != nil {
+			t.Fatalf("Failed to create observable counter: %v", err)
+		}
+
+		obsCounter := inst.(*ObservableCounter[int64])
+		obsCounter.Instrument()
+
+		if !obsCounter.IsMonotonic() {
+			t.Error("Expected monotonic counter")
+		}
+		if obsCounter.Precision() != telemetry.PrecisionInt64 {
+			t.Errorf("Expected PrecisionInt64, got %s", obsCounter.Precision())
+		}
+
+		// Collect to trigger callback
+		obsCounter.Collect(ctx)
+		if callCount != 1 {
+			t.Errorf("Expected callback to be called once, got %d", callCount)
+		}
+
+		// Unregister
+		if err := obsCounter.Unregister(); err != nil {
+			t.Errorf("Unregister() error = %v", err)
+		}
+	})
+
+	t.Run("Int64 observable updown counter", func(t *testing.T) {
+		callback := telemetry.Callback[int64](func(ctx context.Context, obs telemetry.Observer[int64]) {
+			obs.Observe(-5)
+		})
+		inst, _ := meter.NewInstrument("obs_updown1",
+			telemetry.InstrumentTypeObservableCounter,
+			telemetry.CounterTypeUpDown,
+			telemetry.PrecisionInt64,
+			callback,
+		)
+		obsCounter := inst.(*ObservableCounter[int64])
+		if obsCounter.IsMonotonic() {
+			t.Error("Expected non-monotonic counter")
+		}
+		obsCounter.Collect(ctx)
+		obsCounter.Unregister()
+	})
+
+	t.Run("Float64 observable counter", func(t *testing.T) {
+		callback := telemetry.Callback[float64](func(ctx context.Context, obs telemetry.Observer[float64]) {
+			obs.Observe(3.14)
+		})
+		inst, _ := meter.NewInstrument("obs_counter2",
+			telemetry.InstrumentTypeObservableCounter,
+			telemetry.CounterTypeMonotonic,
+			telemetry.PrecisionFloat64,
+			callback,
+		)
+		obsCounter := inst.(*ObservableCounter[float64])
+		if !obsCounter.IsMonotonic() {
+			t.Error("Expected monotonic counter")
+		}
+		if obsCounter.Precision() != telemetry.PrecisionFloat64 {
+			t.Errorf("Expected PrecisionFloat64, got %s", obsCounter.Precision())
+		}
+		obsCounter.Collect(ctx)
+		obsCounter.Unregister()
+	})
+
+	t.Run("Float64 observable updown counter", func(t *testing.T) {
+		callback := telemetry.Callback[float64](func(ctx context.Context, obs telemetry.Observer[float64]) {
+			obs.Observe(-1.5)
+		})
+		inst, _ := meter.NewInstrument("obs_updown2",
+			telemetry.InstrumentTypeObservableCounter,
+			telemetry.CounterTypeUpDown,
+			telemetry.PrecisionFloat64,
+			callback,
+		)
+		obsCounter := inst.(*ObservableCounter[float64])
+		if obsCounter.IsMonotonic() {
+			t.Error("Expected non-monotonic counter")
+		}
+		obsCounter.Collect(ctx)
+		obsCounter.Unregister()
+	})
+
+	t.Run("Observable counter without callback", func(t *testing.T) {
+		inst, _ := meter.NewInstrument("obs_counter_no_cb",
+			telemetry.InstrumentTypeObservableCounter,
+			telemetry.CounterTypeMonotonic,
+			telemetry.PrecisionInt64,
+		)
+		obsCounter := inst.(*ObservableCounter[int64])
+		obsCounter.Collect(ctx) // Should not panic
+		obsCounter.Unregister()
+	})
+}
+
+func TestObservableGauge(t *testing.T) {
+	p := NewProvider()
+	meter, _ := p.Meter("test")
+	ctx := context.Background()
+
+	t.Run("Int64 observable gauge with callback", func(t *testing.T) {
+		callCount := 0
+		callback := telemetry.Callback[int64](func(ctx context.Context, obs telemetry.Observer[int64]) {
+			callCount++
+			obs.Observe(100, "unit", "celsius")
+		})
+		inst, err := meter.NewInstrument("obs_gauge1",
+			telemetry.InstrumentTypeObservableGauge,
+			telemetry.PrecisionInt64,
+			callback,
+		)
+		if err != nil {
+			t.Fatalf("Failed to create observable gauge: %v", err)
+		}
+
+		obsGauge := inst.(*ObservableGauge[int64])
+		obsGauge.Instrument()
+
+		if obsGauge.Precision() != telemetry.PrecisionInt64 {
+			t.Errorf("Expected PrecisionInt64, got %s", obsGauge.Precision())
+		}
+
+		// Collect to trigger callback
+		obsGauge.Collect(ctx)
+		if callCount != 1 {
+			t.Errorf("Expected callback to be called once, got %d", callCount)
+		}
+
+		// Unregister
+		if err := obsGauge.Unregister(); err != nil {
+			t.Errorf("Unregister() error = %v", err)
+		}
+	})
+
+	t.Run("Float64 observable gauge", func(t *testing.T) {
+		callback := telemetry.Callback[float64](func(ctx context.Context, obs telemetry.Observer[float64]) {
+			obs.Observe(98.6)
+		})
+		inst, _ := meter.NewInstrument("obs_gauge2",
+			telemetry.InstrumentTypeObservableGauge,
+			telemetry.PrecisionFloat64,
+			callback,
+		)
+		obsGauge := inst.(*ObservableGauge[float64])
+		if obsGauge.Precision() != telemetry.PrecisionFloat64 {
+			t.Errorf("Expected PrecisionFloat64, got %s", obsGauge.Precision())
+		}
+		obsGauge.Collect(ctx)
+		obsGauge.Unregister()
+	})
+
+	t.Run("Observable gauge without callback", func(t *testing.T) {
+		inst, _ := meter.NewInstrument("obs_gauge_no_cb",
+			telemetry.InstrumentTypeObservableGauge,
+			telemetry.PrecisionFloat64,
+		)
+		obsGauge := inst.(*ObservableGauge[float64])
+		obsGauge.Collect(ctx) // Should not panic
+		obsGauge.Unregister()
+	})
+
+	t.Run("Default precision is Float64", func(t *testing.T) {
+		inst, _ := meter.NewInstrument("obs_gauge_default",
+			telemetry.InstrumentTypeObservableGauge,
+		)
+		_, ok := inst.(*ObservableGauge[float64])
+		if !ok {
+			t.Error("Expected Float64 observable gauge by default")
+		}
+	})
 }

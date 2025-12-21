@@ -78,49 +78,13 @@ func (m *Meter) NewInstrument(name string, opts ...any) (telemetry.Instrument, e
 	var inst telemetry.Instrument
 	switch cfg.instrumentType {
 	case telemetry.InstrumentTypeCounter:
-		switch cfg.counterType {
-		case telemetry.CounterTypeMonotonic:
-			inst = &Counter[int64]{
-				baseInstrument: baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
-				meter:          m,
-				monotonic:      true,
-			}
-		case telemetry.CounterTypeUpDown:
-			inst = &Counter[int64]{
-				baseInstrument: baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
-				meter:          m,
-				monotonic:      false,
-			}
-		default:
-			// Default to monotonic counter
-			inst = &Counter[int64]{
-				baseInstrument: baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
-				meter:          m,
-				monotonic:      true,
-			}
-		}
+		inst = m.createCounter(name, cfg)
 	case telemetry.InstrumentTypeRecorder:
-		switch cfg.aggregationStrategy {
-		case telemetry.AggregationStrategyNone:
-			inst = &Recorder[float64]{
-				baseInstrument:      baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
-				meter:               m,
-				aggregationStrategy: telemetry.AggregationStrategyNone,
-			}
-		case telemetry.AggregationStrategyHistogram:
-			inst = &Recorder[float64]{
-				baseInstrument:      baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
-				meter:               m,
-				aggregationStrategy: telemetry.AggregationStrategyHistogram,
-			}
-		default:
-			// Default to no aggregation (gauge)
-			inst = &Recorder[float64]{
-				baseInstrument:      baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
-				meter:               m,
-				aggregationStrategy: telemetry.AggregationStrategyNone,
-			}
-		}
+		inst = m.createRecorder(name, cfg)
+	case telemetry.InstrumentTypeObservableCounter:
+		inst = m.createObservableCounter(name, cfg, opts)
+	case telemetry.InstrumentTypeObservableGauge:
+		inst = m.createObservableGauge(name, cfg, opts)
 	default:
 		// Return nil for unknown instrument type (matches NoopProvider behavior)
 		return nil, nil
@@ -128,6 +92,126 @@ func (m *Meter) NewInstrument(name string, opts ...any) (telemetry.Instrument, e
 
 	m.instruments[name] = inst
 	return inst, nil
+}
+
+// createCounter creates a counter instrument based on configuration.
+func (m *Meter) createCounter(name string, cfg *InstrumentConfig) telemetry.Instrument {
+	monotonic := cfg.counterType != telemetry.CounterTypeUpDown
+	switch cfg.precision {
+	case telemetry.PrecisionFloat64:
+		return &Counter[float64]{
+			baseInstrument: baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
+			meter:          m,
+			monotonic:      monotonic,
+			precision:      telemetry.PrecisionFloat64,
+		}
+	default: // Default to Int64
+		return &Counter[int64]{
+			baseInstrument: baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
+			meter:          m,
+			monotonic:      monotonic,
+			precision:      telemetry.PrecisionInt64,
+		}
+	}
+}
+
+// createRecorder creates a recorder instrument based on configuration.
+func (m *Meter) createRecorder(name string, cfg *InstrumentConfig) telemetry.Instrument {
+	strategy := cfg.aggregationStrategy
+	if strategy == telemetry.AggregationStrategyUnknown {
+		strategy = telemetry.AggregationStrategyNone
+	}
+	switch cfg.precision {
+	case telemetry.PrecisionInt64:
+		return &Recorder[int64]{
+			baseInstrument:      baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
+			meter:               m,
+			aggregationStrategy: strategy,
+			precision:           telemetry.PrecisionInt64,
+		}
+	default: // Default to Float64
+		return &Recorder[float64]{
+			baseInstrument:      baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
+			meter:               m,
+			aggregationStrategy: strategy,
+			precision:           telemetry.PrecisionFloat64,
+		}
+	}
+}
+
+// createObservableCounter creates an observable counter instrument based on configuration.
+func (m *Meter) createObservableCounter(name string, cfg *InstrumentConfig, opts []any) telemetry.Instrument {
+	monotonic := cfg.counterType != telemetry.CounterTypeUpDown
+	switch cfg.precision {
+	case telemetry.PrecisionFloat64:
+		var callback telemetry.Callback[float64]
+		for _, opt := range opts {
+			if cb, ok := opt.(telemetry.Callback[float64]); ok {
+				callback = cb
+				break
+			}
+		}
+		return &ObservableCounter[float64]{
+			baseInstrument: baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
+			meter:          m,
+			monotonic:      monotonic,
+			precision:      telemetry.PrecisionFloat64,
+			callback:       callback,
+			registered:     callback != nil,
+		}
+	default: // Default to Int64
+		var callback telemetry.Callback[int64]
+		for _, opt := range opts {
+			if cb, ok := opt.(telemetry.Callback[int64]); ok {
+				callback = cb
+				break
+			}
+		}
+		return &ObservableCounter[int64]{
+			baseInstrument: baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
+			meter:          m,
+			monotonic:      monotonic,
+			precision:      telemetry.PrecisionInt64,
+			callback:       callback,
+			registered:     callback != nil,
+		}
+	}
+}
+
+// createObservableGauge creates an observable gauge instrument based on configuration.
+func (m *Meter) createObservableGauge(name string, cfg *InstrumentConfig, opts []any) telemetry.Instrument {
+	switch cfg.precision {
+	case telemetry.PrecisionInt64:
+		var callback telemetry.Callback[int64]
+		for _, opt := range opts {
+			if cb, ok := opt.(telemetry.Callback[int64]); ok {
+				callback = cb
+				break
+			}
+		}
+		return &ObservableGauge[int64]{
+			baseInstrument: baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
+			meter:          m,
+			precision:      telemetry.PrecisionInt64,
+			callback:       callback,
+			registered:     callback != nil,
+		}
+	default: // Default to Float64
+		var callback telemetry.Callback[float64]
+		for _, opt := range opts {
+			if cb, ok := opt.(telemetry.Callback[float64]); ok {
+				callback = cb
+				break
+			}
+		}
+		return &ObservableGauge[float64]{
+			baseInstrument: baseInstrument{name: name, description: cfg.description, unit: cfg.unit},
+			meter:          m,
+			precision:      telemetry.PrecisionFloat64,
+			callback:       callback,
+			registered:     callback != nil,
+		}
+	}
 }
 
 // RecordedMeasurement represents a measurement that was recorded.

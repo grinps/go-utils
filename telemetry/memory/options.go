@@ -277,6 +277,7 @@ type InstrumentConfig struct {
 	instrumentType      telemetry.InstrumentType
 	counterType         telemetry.CounterType
 	aggregationStrategy telemetry.AggregationStrategy
+	precision           telemetry.Precision
 }
 
 // parseInstrumentOptions extracts instrument configuration from variadic any options.
@@ -305,6 +306,8 @@ func parseInstrumentOptions(opts ...any) *InstrumentConfig {
 			cfg.counterType = v
 		case telemetry.AggregationStrategy:
 			cfg.aggregationStrategy = v
+		case telemetry.Precision:
+			cfg.precision = v
 		}
 	}
 	return cfg
