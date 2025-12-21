@@ -17,23 +17,21 @@ type Meter interface {
 	NewInstrument(name string, opts ...any) (Instrument, error)
 }
 
-// Instrument is the base interface for all metric instruments.
+// Instrument is a marker interface for all metric instruments.
 type Instrument interface {
-	// Name returns the name of the instrument.
-	Name() string
-	// Description returns the description of the instrument.
-	Description() string
-	// Unit returns the unit of the instrument.
-	Unit() string
+	// Instrument is a marker method that identifies instrument types.
+	Instrument()
 }
 
-// Synchronous instruments are used to record measurements as they happen.
+// InstrumentType identifies the kind of instrument.
 type InstrumentType string
 
 const (
-	InstrumentTypeUnknown  InstrumentType = ""
-	InstrumentTypeCounter  InstrumentType = "counter"
-	InstrumentTypeRecorder InstrumentType = "recorder"
+	InstrumentTypeUnknown           InstrumentType = ""
+	InstrumentTypeCounter           InstrumentType = "counter"
+	InstrumentTypeRecorder          InstrumentType = "recorder"
+	InstrumentTypeObservableCounter InstrumentType = "observable_counter"
+	InstrumentTypeObservableGauge   InstrumentType = "observable_gauge"
 )
 
 type CounterType string
@@ -44,10 +42,19 @@ const (
 	CounterTypeUpDown    CounterType = "updown"
 )
 
+type Precision string
+
+const (
+	PrecisionUnknown Precision = ""
+	PrecisionInt64   Precision = "int64"
+	PrecisionFloat64 Precision = "float64"
+)
+
 // Counter is a synchronous instrument for recording increments and decrements.
 type Counter[T Number] interface {
 	Instrument
 	IsMonotonic() bool
+	Precision() Precision
 	Add(ctx context.Context, value T, attrs ...any)
 }
 
@@ -71,19 +78,35 @@ type Recorder[T Number] interface {
 	Instrument
 	IsAggregating() bool
 	AggregationStrategy() AggregationStrategy
+	Precision() Precision
 	Record(ctx context.Context, value T, attrs ...any)
 }
 
-// Callback is a function called to observe values.
+// Callback is a function called to observe values for async instruments.
 type Callback[T Number] func(ctx context.Context, observer Observer[T])
 
 // Observer is used by Callback to report observations.
 type Observer[T Number] interface {
 	// Observe records a value with the given attributes.
-	Observe(value T, opts ...any)
+	Observe(value T, attrs ...any)
 }
 
 // ObservableInstrument is the base interface for asynchronous instruments.
 type ObservableInstrument interface {
 	Instrument
+	// Unregister removes the callback registration.
+	Unregister() error
+}
+
+// ObservableCounter is an async instrument that reports monotonic or updown sums.
+type ObservableCounter[T Number] interface {
+	ObservableInstrument
+	IsMonotonic() bool
+	Precision() Precision
+}
+
+// ObservableGauge is an async instrument that reports current point-in-time values.
+type ObservableGauge[T Number] interface {
+	ObservableInstrument
+	Precision() Precision
 }

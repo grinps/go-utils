@@ -79,6 +79,7 @@ type noopInstrumentConfig struct {
 	instrumentType      InstrumentType
 	counterType         CounterType
 	aggregationStrategy AggregationStrategy
+	precision           Precision
 }
 
 func (m *noopMeter) NewInstrument(name string, opts ...any) (Instrument, error) {
@@ -87,6 +88,7 @@ func (m *noopMeter) NewInstrument(name string, opts ...any) (Instrument, error) 
 		instrumentType:      InstrumentTypeUnknown,
 		counterType:         CounterTypeUnknown,
 		aggregationStrategy: AggregationStrategyUnknown,
+		precision:           PrecisionUnknown,
 	}
 	var instrument Instrument = nil
 	var errs []error = []error{}
@@ -104,6 +106,8 @@ func (m *noopMeter) NewInstrument(name string, opts ...any) (Instrument, error) 
 			noopInstrumentConfig.counterType = optA
 		case AggregationStrategy:
 			noopInstrumentConfig.aggregationStrategy = optA
+		case Precision:
+			noopInstrumentConfig.precision = optA
 		case ErrorHandlingStrategy:
 			errorHandlingStrategy = optA
 		default:
@@ -112,19 +116,13 @@ func (m *noopMeter) NewInstrument(name string, opts ...any) (Instrument, error) 
 	}
 	switch noopInstrumentConfig.instrumentType {
 	case InstrumentTypeCounter:
-		switch noopInstrumentConfig.counterType {
-		case CounterTypeMonotonic:
-			instrument = &noopInt64Counter{}
-		default:
-			errs = append(errs, ErrInstrumentCreation.New(ErrReasonInvalidCounterType, ErrParamCounterType, noopInstrumentConfig.counterType))
-		}
+		instrument = createNoopCounter(noopInstrumentConfig.counterType, noopInstrumentConfig.precision)
 	case InstrumentTypeRecorder:
-		switch noopInstrumentConfig.aggregationStrategy {
-		case AggregationStrategyNone:
-			instrument = &noopFloat64Gauge{}
-		default:
-			errs = append(errs, ErrInstrumentCreation.New(ErrReasonInvalidAggregationStrategy, ErrParamAggregationStrategy, noopInstrumentConfig.aggregationStrategy))
-		}
+		instrument = createNoopRecorder(noopInstrumentConfig.aggregationStrategy, noopInstrumentConfig.precision)
+	case InstrumentTypeObservableCounter:
+		instrument = createNoopObservableCounter(noopInstrumentConfig.counterType, noopInstrumentConfig.precision)
+	case InstrumentTypeObservableGauge:
+		instrument = createNoopObservableGauge(noopInstrumentConfig.precision)
 	default:
 		errs = append(errs, ErrInstrumentCreation.New(ErrReasonInvalidInstrumentType, ErrParamInstrumentType, noopInstrumentConfig.instrumentType))
 	}
@@ -134,24 +132,204 @@ func (m *noopMeter) NewInstrument(name string, opts ...any) (Instrument, error) 
 	return instrument, nil
 }
 
-// No-op instruments for shutdown provider
+// createNoopCounter creates a no-op counter based on counter type and precision.
+func createNoopCounter(counterType CounterType, precision Precision) Instrument {
+	switch precision {
+	case PrecisionFloat64:
+		switch counterType {
+		case CounterTypeUpDown:
+			return &noopFloat64UpDownCounter{}
+		default:
+			return &noopFloat64Counter{}
+		}
+	default: // Default to Int64
+		switch counterType {
+		case CounterTypeUpDown:
+			return &noopInt64UpDownCounter{}
+		default:
+			return &noopInt64Counter{}
+		}
+	}
+}
 
-type noopInstrument struct{}
+// createNoopRecorder creates a no-op recorder based on aggregation strategy and precision.
+func createNoopRecorder(strategy AggregationStrategy, precision Precision) Instrument {
+	switch precision {
+	case PrecisionInt64:
+		switch strategy {
+		case AggregationStrategyHistogram:
+			return &noopInt64Histogram{}
+		default:
+			return &noopInt64Gauge{}
+		}
+	default: // Default to Float64
+		switch strategy {
+		case AggregationStrategyHistogram:
+			return &noopFloat64Histogram{}
+		default:
+			return &noopFloat64Gauge{}
+		}
+	}
+}
 
-func (n *noopInstrument) Name() string        { return "" }
-func (n *noopInstrument) Description() string { return "" }
-func (n *noopInstrument) Unit() string        { return "" }
+// No-op counter instruments
 
 var _ Counter[int64] = &noopInt64Counter{}
-var _ Recorder[float64] = &noopFloat64Gauge{}
+var _ Counter[int64] = &noopInt64UpDownCounter{}
+var _ Counter[float64] = &noopFloat64Counter{}
+var _ Counter[float64] = &noopFloat64UpDownCounter{}
 
-type noopInt64Counter struct{ noopInstrument }
+type noopInt64Counter struct{}
 
+func (n *noopInt64Counter) Instrument()                                        {}
 func (n *noopInt64Counter) Add(ctx context.Context, value int64, attrs ...any) {}
 func (n *noopInt64Counter) IsMonotonic() bool                                  { return true }
+func (n *noopInt64Counter) Precision() Precision                               { return PrecisionInt64 }
 
-type noopFloat64Gauge struct{ noopInstrument }
+type noopInt64UpDownCounter struct{}
 
+func (n *noopInt64UpDownCounter) Instrument()                                        {}
+func (n *noopInt64UpDownCounter) Add(ctx context.Context, value int64, attrs ...any) {}
+func (n *noopInt64UpDownCounter) IsMonotonic() bool                                  { return false }
+func (n *noopInt64UpDownCounter) Precision() Precision                               { return PrecisionInt64 }
+
+type noopFloat64Counter struct{}
+
+func (n *noopFloat64Counter) Instrument()                                          {}
+func (n *noopFloat64Counter) Add(ctx context.Context, value float64, attrs ...any) {}
+func (n *noopFloat64Counter) IsMonotonic() bool                                    { return true }
+func (n *noopFloat64Counter) Precision() Precision                                 { return PrecisionFloat64 }
+
+type noopFloat64UpDownCounter struct{}
+
+func (n *noopFloat64UpDownCounter) Instrument()                                          {}
+func (n *noopFloat64UpDownCounter) Add(ctx context.Context, value float64, attrs ...any) {}
+func (n *noopFloat64UpDownCounter) IsMonotonic() bool                                    { return false }
+func (n *noopFloat64UpDownCounter) Precision() Precision                                 { return PrecisionFloat64 }
+
+// No-op recorder instruments
+
+var _ Recorder[int64] = &noopInt64Gauge{}
+var _ Recorder[int64] = &noopInt64Histogram{}
+var _ Recorder[float64] = &noopFloat64Gauge{}
+var _ Recorder[float64] = &noopFloat64Histogram{}
+
+type noopInt64Gauge struct{}
+
+func (n *noopInt64Gauge) Instrument()                                           {}
+func (n *noopInt64Gauge) Record(ctx context.Context, value int64, attrs ...any) {}
+func (n *noopInt64Gauge) IsAggregating() bool                                   { return false }
+func (n *noopInt64Gauge) AggregationStrategy() AggregationStrategy              { return AggregationStrategyNone }
+func (n *noopInt64Gauge) Precision() Precision                                  { return PrecisionInt64 }
+
+type noopInt64Histogram struct{}
+
+func (n *noopInt64Histogram) Instrument()                                           {}
+func (n *noopInt64Histogram) Record(ctx context.Context, value int64, attrs ...any) {}
+func (n *noopInt64Histogram) IsAggregating() bool                                   { return true }
+func (n *noopInt64Histogram) AggregationStrategy() AggregationStrategy {
+	return AggregationStrategyHistogram
+}
+func (n *noopInt64Histogram) Precision() Precision { return PrecisionInt64 }
+
+type noopFloat64Gauge struct{}
+
+func (n *noopFloat64Gauge) Instrument()                                             {}
 func (n *noopFloat64Gauge) Record(ctx context.Context, value float64, attrs ...any) {}
 func (n *noopFloat64Gauge) IsAggregating() bool                                     { return false }
 func (n *noopFloat64Gauge) AggregationStrategy() AggregationStrategy                { return AggregationStrategyNone }
+func (n *noopFloat64Gauge) Precision() Precision                                    { return PrecisionFloat64 }
+
+type noopFloat64Histogram struct{}
+
+func (n *noopFloat64Histogram) Instrument()                                             {}
+func (n *noopFloat64Histogram) Record(ctx context.Context, value float64, attrs ...any) {}
+func (n *noopFloat64Histogram) IsAggregating() bool                                     { return true }
+func (n *noopFloat64Histogram) AggregationStrategy() AggregationStrategy {
+	return AggregationStrategyHistogram
+}
+func (n *noopFloat64Histogram) Precision() Precision { return PrecisionFloat64 }
+
+// No-op observable counter factory
+
+func createNoopObservableCounter(counterType CounterType, precision Precision) Instrument {
+	switch precision {
+	case PrecisionFloat64:
+		switch counterType {
+		case CounterTypeUpDown:
+			return &noopObservableFloat64UpDownCounter{}
+		default:
+			return &noopObservableFloat64Counter{}
+		}
+	default: // Default to Int64
+		switch counterType {
+		case CounterTypeUpDown:
+			return &noopObservableInt64UpDownCounter{}
+		default:
+			return &noopObservableInt64Counter{}
+		}
+	}
+}
+
+// No-op observable gauge factory
+
+func createNoopObservableGauge(precision Precision) Instrument {
+	switch precision {
+	case PrecisionInt64:
+		return &noopObservableInt64Gauge{}
+	default: // Default to Float64
+		return &noopObservableFloat64Gauge{}
+	}
+}
+
+// No-op observable counter instruments
+
+var _ ObservableCounter[int64] = &noopObservableInt64Counter{}
+var _ ObservableCounter[int64] = &noopObservableInt64UpDownCounter{}
+var _ ObservableCounter[float64] = &noopObservableFloat64Counter{}
+var _ ObservableCounter[float64] = &noopObservableFloat64UpDownCounter{}
+
+type noopObservableInt64Counter struct{}
+
+func (n *noopObservableInt64Counter) Instrument()          {}
+func (n *noopObservableInt64Counter) Unregister() error    { return nil }
+func (n *noopObservableInt64Counter) IsMonotonic() bool    { return true }
+func (n *noopObservableInt64Counter) Precision() Precision { return PrecisionInt64 }
+
+type noopObservableInt64UpDownCounter struct{}
+
+func (n *noopObservableInt64UpDownCounter) Instrument()          {}
+func (n *noopObservableInt64UpDownCounter) Unregister() error    { return nil }
+func (n *noopObservableInt64UpDownCounter) IsMonotonic() bool    { return false }
+func (n *noopObservableInt64UpDownCounter) Precision() Precision { return PrecisionInt64 }
+
+type noopObservableFloat64Counter struct{}
+
+func (n *noopObservableFloat64Counter) Instrument()          {}
+func (n *noopObservableFloat64Counter) Unregister() error    { return nil }
+func (n *noopObservableFloat64Counter) IsMonotonic() bool    { return true }
+func (n *noopObservableFloat64Counter) Precision() Precision { return PrecisionFloat64 }
+
+type noopObservableFloat64UpDownCounter struct{}
+
+func (n *noopObservableFloat64UpDownCounter) Instrument()          {}
+func (n *noopObservableFloat64UpDownCounter) Unregister() error    { return nil }
+func (n *noopObservableFloat64UpDownCounter) IsMonotonic() bool    { return false }
+func (n *noopObservableFloat64UpDownCounter) Precision() Precision { return PrecisionFloat64 }
+
+// No-op observable gauge instruments
+
+var _ ObservableGauge[int64] = &noopObservableInt64Gauge{}
+var _ ObservableGauge[float64] = &noopObservableFloat64Gauge{}
+
+type noopObservableInt64Gauge struct{}
+
+func (n *noopObservableInt64Gauge) Instrument()          {}
+func (n *noopObservableInt64Gauge) Unregister() error    { return nil }
+func (n *noopObservableInt64Gauge) Precision() Precision { return PrecisionInt64 }
+
+type noopObservableFloat64Gauge struct{}
+
+func (n *noopObservableFloat64Gauge) Instrument()          {}
+func (n *noopObservableFloat64Gauge) Unregister() error    { return nil }
+func (n *noopObservableFloat64Gauge) Precision() Precision { return PrecisionFloat64 }

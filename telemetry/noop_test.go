@@ -229,29 +229,26 @@ func TestNoopMeter_NewInstrument(t *testing.T) {
 			t.Fatalf("Expected Counter[int64], got %T", inst)
 		}
 
-		// Test counter methods
-		if counter.Name() != "" {
-			t.Error("noopInstrument.Name() should return empty string")
-		}
-		if counter.Description() != "" {
-			t.Error("noopInstrument.Description() should return empty string")
-		}
-		if counter.Unit() != "" {
-			t.Error("noopInstrument.Unit() should return empty string")
-		}
 		if !counter.IsMonotonic() {
 			t.Error("noopInt64Counter.IsMonotonic() should return true")
 		}
 		counter.Add(context.Background(), 10) // Should not panic
 	})
 
-	t.Run("counter with invalid counter type", func(t *testing.T) {
-		inst, err := meter.NewInstrument("counter", InstrumentTypeCounter, CounterTypeUnknown, ErrorHandlingStrategyReturn)
-		if err == nil {
-			t.Fatal("Expected error with invalid counter type")
+	t.Run("counter with unknown counter type defaults to monotonic", func(t *testing.T) {
+		inst, err := meter.NewInstrument("counter_default", InstrumentTypeCounter, CounterTypeUnknown)
+		if err != nil {
+			t.Fatalf("NewInstrument() error = %v", err)
 		}
-		if inst != nil {
-			t.Error("Expected nil instrument on error")
+		if inst == nil {
+			t.Fatal("Expected non-nil instrument")
+		}
+		counter, ok := inst.(Counter[int64])
+		if !ok {
+			t.Fatalf("Expected Counter[int64], got %T", inst)
+		}
+		if !counter.IsMonotonic() {
+			t.Error("Default counter should be monotonic")
 		}
 	})
 
@@ -278,13 +275,20 @@ func TestNoopMeter_NewInstrument(t *testing.T) {
 		recorder.Record(context.Background(), 1.5) // Should not panic
 	})
 
-	t.Run("recorder with invalid aggregation", func(t *testing.T) {
-		inst, err := meter.NewInstrument("gauge", InstrumentTypeRecorder, AggregationStrategyUnknown, ErrorHandlingStrategyReturn)
-		if err == nil {
-			t.Fatal("Expected error with invalid aggregation strategy")
+	t.Run("recorder with unknown aggregation defaults to gauge", func(t *testing.T) {
+		inst, err := meter.NewInstrument("gauge_default", InstrumentTypeRecorder, AggregationStrategyUnknown)
+		if err != nil {
+			t.Fatalf("NewInstrument() error = %v", err)
 		}
-		if inst != nil {
-			t.Error("Expected nil instrument on error")
+		if inst == nil {
+			t.Fatal("Expected non-nil instrument")
+		}
+		recorder, ok := inst.(Recorder[float64])
+		if !ok {
+			t.Fatalf("Expected Recorder[float64], got %T", inst)
+		}
+		if recorder.IsAggregating() {
+			t.Error("Default recorder should not be aggregating (gauge)")
 		}
 	})
 
@@ -320,22 +324,12 @@ func TestNoopMeter_NewInstrument(t *testing.T) {
 	})
 }
 
-func TestNoopInstrument(t *testing.T) {
-	inst := &noopInstrument{}
-
-	if inst.Name() != "" {
-		t.Errorf("Name() = %q, want empty", inst.Name())
-	}
-	if inst.Description() != "" {
-		t.Errorf("Description() = %q, want empty", inst.Description())
-	}
-	if inst.Unit() != "" {
-		t.Errorf("Unit() = %q, want empty", inst.Unit())
-	}
-}
-
 func TestNoopInt64Counter(t *testing.T) {
 	counter := &noopInt64Counter{}
+
+	t.Run("Instrument marker method", func(t *testing.T) {
+		counter.Instrument() // Should not panic
+	})
 
 	t.Run("Add does nothing", func(t *testing.T) {
 		counter.Add(context.Background(), 1)
@@ -348,15 +342,19 @@ func TestNoopInt64Counter(t *testing.T) {
 		}
 	})
 
-	t.Run("inherits noopInstrument", func(t *testing.T) {
-		if counter.Name() != "" {
-			t.Error("Name() should return empty string")
+	t.Run("Precision returns PrecisionInt64", func(t *testing.T) {
+		if counter.Precision() != PrecisionInt64 {
+			t.Errorf("Precision() = %v, want %v", counter.Precision(), PrecisionInt64)
 		}
 	})
 }
 
 func TestNoopFloat64Gauge(t *testing.T) {
 	gauge := &noopFloat64Gauge{}
+
+	t.Run("Instrument marker method", func(t *testing.T) {
+		gauge.Instrument() // Should not panic
+	})
 
 	t.Run("Record does nothing", func(t *testing.T) {
 		gauge.Record(context.Background(), 1.5)
@@ -375,9 +373,326 @@ func TestNoopFloat64Gauge(t *testing.T) {
 		}
 	})
 
-	t.Run("inherits noopInstrument", func(t *testing.T) {
-		if gauge.Name() != "" {
-			t.Error("Name() should return empty string")
+	t.Run("Precision returns PrecisionFloat64", func(t *testing.T) {
+		if gauge.Precision() != PrecisionFloat64 {
+			t.Errorf("Precision() = %v, want %v", gauge.Precision(), PrecisionFloat64)
+		}
+	})
+}
+
+func TestNoopObservableCounter(t *testing.T) {
+	provider := &NoopProvider{}
+	meter, _ := provider.Meter("test")
+
+	t.Run("observable counter int64", func(t *testing.T) {
+		inst, err := meter.NewInstrument("obs_counter",
+			InstrumentTypeObservableCounter,
+			CounterTypeMonotonic,
+			PrecisionInt64,
+		)
+		if err != nil {
+			t.Fatalf("NewInstrument() error = %v", err)
+		}
+		counter, ok := inst.(ObservableCounter[int64])
+		if !ok {
+			t.Fatalf("Expected ObservableCounter[int64], got %T", inst)
+		}
+		if !counter.IsMonotonic() {
+			t.Error("IsMonotonic() should return true")
+		}
+		if counter.Precision() != PrecisionInt64 {
+			t.Errorf("Precision() = %v, want %v", counter.Precision(), PrecisionInt64)
+		}
+		if err := counter.Unregister(); err != nil {
+			t.Errorf("Unregister() error = %v", err)
+		}
+	})
+
+	t.Run("observable updown counter float64", func(t *testing.T) {
+		inst, err := meter.NewInstrument("obs_updown",
+			InstrumentTypeObservableCounter,
+			CounterTypeUpDown,
+			PrecisionFloat64,
+		)
+		if err != nil {
+			t.Fatalf("NewInstrument() error = %v", err)
+		}
+		counter, ok := inst.(ObservableCounter[float64])
+		if !ok {
+			t.Fatalf("Expected ObservableCounter[float64], got %T", inst)
+		}
+		if counter.IsMonotonic() {
+			t.Error("IsMonotonic() should return false for updown counter")
+		}
+		if counter.Precision() != PrecisionFloat64 {
+			t.Errorf("Precision() = %v, want %v", counter.Precision(), PrecisionFloat64)
+		}
+	})
+}
+
+func TestNoopObservableGauge(t *testing.T) {
+	provider := &NoopProvider{}
+	meter, _ := provider.Meter("test")
+
+	t.Run("observable gauge float64", func(t *testing.T) {
+		inst, err := meter.NewInstrument("obs_gauge",
+			InstrumentTypeObservableGauge,
+			PrecisionFloat64,
+		)
+		if err != nil {
+			t.Fatalf("NewInstrument() error = %v", err)
+		}
+		gauge, ok := inst.(ObservableGauge[float64])
+		if !ok {
+			t.Fatalf("Expected ObservableGauge[float64], got %T", inst)
+		}
+		if gauge.Precision() != PrecisionFloat64 {
+			t.Errorf("Precision() = %v, want %v", gauge.Precision(), PrecisionFloat64)
+		}
+		if err := gauge.Unregister(); err != nil {
+			t.Errorf("Unregister() error = %v", err)
+		}
+	})
+
+	t.Run("observable gauge int64", func(t *testing.T) {
+		inst, err := meter.NewInstrument("obs_gauge_int",
+			InstrumentTypeObservableGauge,
+			PrecisionInt64,
+		)
+		if err != nil {
+			t.Fatalf("NewInstrument() error = %v", err)
+		}
+		gauge, ok := inst.(ObservableGauge[int64])
+		if !ok {
+			t.Fatalf("Expected ObservableGauge[int64], got %T", inst)
+		}
+		if gauge.Precision() != PrecisionInt64 {
+			t.Errorf("Precision() = %v, want %v", gauge.Precision(), PrecisionInt64)
+		}
+	})
+}
+
+func TestNoopObservableInstrumentMethods(t *testing.T) {
+	// Test all noop observable counter variants
+	t.Run("noopObservableInt64Counter", func(t *testing.T) {
+		c := &noopObservableInt64Counter{}
+		c.Instrument()
+		if err := c.Unregister(); err != nil {
+			t.Errorf("Unregister() error = %v", err)
+		}
+		if !c.IsMonotonic() {
+			t.Error("IsMonotonic() should return true")
+		}
+		if c.Precision() != PrecisionInt64 {
+			t.Errorf("Precision() = %v, want %v", c.Precision(), PrecisionInt64)
+		}
+	})
+
+	t.Run("noopObservableInt64UpDownCounter", func(t *testing.T) {
+		c := &noopObservableInt64UpDownCounter{}
+		c.Instrument()
+		if err := c.Unregister(); err != nil {
+			t.Errorf("Unregister() error = %v", err)
+		}
+		if c.IsMonotonic() {
+			t.Error("IsMonotonic() should return false")
+		}
+		if c.Precision() != PrecisionInt64 {
+			t.Errorf("Precision() = %v, want %v", c.Precision(), PrecisionInt64)
+		}
+	})
+
+	t.Run("noopObservableFloat64Counter", func(t *testing.T) {
+		c := &noopObservableFloat64Counter{}
+		c.Instrument()
+		if err := c.Unregister(); err != nil {
+			t.Errorf("Unregister() error = %v", err)
+		}
+		if !c.IsMonotonic() {
+			t.Error("IsMonotonic() should return true")
+		}
+		if c.Precision() != PrecisionFloat64 {
+			t.Errorf("Precision() = %v, want %v", c.Precision(), PrecisionFloat64)
+		}
+	})
+
+	t.Run("noopObservableFloat64UpDownCounter", func(t *testing.T) {
+		c := &noopObservableFloat64UpDownCounter{}
+		c.Instrument()
+		if err := c.Unregister(); err != nil {
+			t.Errorf("Unregister() error = %v", err)
+		}
+		if c.IsMonotonic() {
+			t.Error("IsMonotonic() should return false")
+		}
+		if c.Precision() != PrecisionFloat64 {
+			t.Errorf("Precision() = %v, want %v", c.Precision(), PrecisionFloat64)
+		}
+	})
+
+	// Test all noop observable gauge variants
+	t.Run("noopObservableInt64Gauge", func(t *testing.T) {
+		g := &noopObservableInt64Gauge{}
+		g.Instrument()
+		if err := g.Unregister(); err != nil {
+			t.Errorf("Unregister() error = %v", err)
+		}
+		if g.Precision() != PrecisionInt64 {
+			t.Errorf("Precision() = %v, want %v", g.Precision(), PrecisionInt64)
+		}
+	})
+
+	t.Run("noopObservableFloat64Gauge", func(t *testing.T) {
+		g := &noopObservableFloat64Gauge{}
+		g.Instrument()
+		if err := g.Unregister(); err != nil {
+			t.Errorf("Unregister() error = %v", err)
+		}
+		if g.Precision() != PrecisionFloat64 {
+			t.Errorf("Precision() = %v, want %v", g.Precision(), PrecisionFloat64)
+		}
+	})
+}
+
+func TestNoopSpanMethods(t *testing.T) {
+	span := &noopSpan{}
+
+	// Test all span methods for coverage
+	span.End("opt1", 123)
+	span.SetAttributes("key", "value", "key2", 123)
+	span.AddEvent("event", "opt1")
+	span.RecordError(nil, "opt1")
+	span.SetStatus(1, "error")
+	span.SetName("new-name")
+
+	if span.IsRecording() {
+		t.Error("IsRecording() should return false")
+	}
+	if span.TracerProvider() != nil {
+		t.Error("TracerProvider() should return nil")
+	}
+}
+
+func TestNoopCounterVariants(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("noopInt64Counter", func(t *testing.T) {
+		c := &noopInt64Counter{}
+		c.Instrument()
+		c.Add(ctx, 1)
+		c.Add(ctx, 100, "attr1", "attr2")
+		if !c.IsMonotonic() {
+			t.Error("IsMonotonic() should return true")
+		}
+		if c.Precision() != PrecisionInt64 {
+			t.Errorf("Precision() = %v, want %v", c.Precision(), PrecisionInt64)
+		}
+	})
+
+	t.Run("noopInt64UpDownCounter", func(t *testing.T) {
+		c := &noopInt64UpDownCounter{}
+		c.Instrument()
+		c.Add(ctx, 1)
+		c.Add(ctx, -1, "attr")
+		if c.IsMonotonic() {
+			t.Error("IsMonotonic() should return false")
+		}
+		if c.Precision() != PrecisionInt64 {
+			t.Errorf("Precision() = %v, want %v", c.Precision(), PrecisionInt64)
+		}
+	})
+
+	t.Run("noopFloat64Counter", func(t *testing.T) {
+		c := &noopFloat64Counter{}
+		c.Instrument()
+		c.Add(ctx, 1.5)
+		c.Add(ctx, 2.5, "attr")
+		if !c.IsMonotonic() {
+			t.Error("IsMonotonic() should return true")
+		}
+		if c.Precision() != PrecisionFloat64 {
+			t.Errorf("Precision() = %v, want %v", c.Precision(), PrecisionFloat64)
+		}
+	})
+
+	t.Run("noopFloat64UpDownCounter", func(t *testing.T) {
+		c := &noopFloat64UpDownCounter{}
+		c.Instrument()
+		c.Add(ctx, 1.5)
+		c.Add(ctx, -1.5, "attr")
+		if c.IsMonotonic() {
+			t.Error("IsMonotonic() should return false")
+		}
+		if c.Precision() != PrecisionFloat64 {
+			t.Errorf("Precision() = %v, want %v", c.Precision(), PrecisionFloat64)
+		}
+	})
+}
+
+func TestNoopRecorderVariants(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("noopInt64Gauge", func(t *testing.T) {
+		g := &noopInt64Gauge{}
+		g.Instrument()
+		g.Record(ctx, 100)
+		g.Record(ctx, 200, "attr")
+		if g.IsAggregating() {
+			t.Error("IsAggregating() should return false")
+		}
+		if g.AggregationStrategy() != AggregationStrategyNone {
+			t.Errorf("AggregationStrategy() = %v, want %v", g.AggregationStrategy(), AggregationStrategyNone)
+		}
+		if g.Precision() != PrecisionInt64 {
+			t.Errorf("Precision() = %v, want %v", g.Precision(), PrecisionInt64)
+		}
+	})
+
+	t.Run("noopInt64Histogram", func(t *testing.T) {
+		h := &noopInt64Histogram{}
+		h.Instrument()
+		h.Record(ctx, 100)
+		h.Record(ctx, 200, "attr")
+		if !h.IsAggregating() {
+			t.Error("IsAggregating() should return true")
+		}
+		if h.AggregationStrategy() != AggregationStrategyHistogram {
+			t.Errorf("AggregationStrategy() = %v, want %v", h.AggregationStrategy(), AggregationStrategyHistogram)
+		}
+		if h.Precision() != PrecisionInt64 {
+			t.Errorf("Precision() = %v, want %v", h.Precision(), PrecisionInt64)
+		}
+	})
+
+	t.Run("noopFloat64Gauge", func(t *testing.T) {
+		g := &noopFloat64Gauge{}
+		g.Instrument()
+		g.Record(ctx, 1.5)
+		g.Record(ctx, 2.5, "attr")
+		if g.IsAggregating() {
+			t.Error("IsAggregating() should return false")
+		}
+		if g.AggregationStrategy() != AggregationStrategyNone {
+			t.Errorf("AggregationStrategy() = %v, want %v", g.AggregationStrategy(), AggregationStrategyNone)
+		}
+		if g.Precision() != PrecisionFloat64 {
+			t.Errorf("Precision() = %v, want %v", g.Precision(), PrecisionFloat64)
+		}
+	})
+
+	t.Run("noopFloat64Histogram", func(t *testing.T) {
+		h := &noopFloat64Histogram{}
+		h.Instrument()
+		h.Record(ctx, 1.5)
+		h.Record(ctx, 2.5, "attr")
+		if !h.IsAggregating() {
+			t.Error("IsAggregating() should return true")
+		}
+		if h.AggregationStrategy() != AggregationStrategyHistogram {
+			t.Errorf("AggregationStrategy() = %v, want %v", h.AggregationStrategy(), AggregationStrategyHistogram)
+		}
+		if h.Precision() != PrecisionFloat64 {
+			t.Errorf("Precision() = %v, want %v", h.Precision(), PrecisionFloat64)
 		}
 	})
 }

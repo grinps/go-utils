@@ -15,7 +15,13 @@
 //   - Tracer: Creates and manages Spans for distributed tracing
 //   - Span: Represents a unit of work with timing, attributes, and events
 //   - Meter: Creates metric instruments for measuring application behavior
-//   - Instrument: Base interface for all metric instruments
+//   - Instrument: Marker interface for all metric instruments (Instrument() method)
+//   - Counter: Synchronous instrument for increments/decrements with Precision()
+//   - Recorder: Synchronous instrument for point-in-time values with Precision()
+//   - ObservableCounter: Async instrument for callback-based counter observations
+//   - ObservableGauge: Async instrument for callback-based gauge observations
+//   - Callback: Function type for async instrument observations
+//   - Observer: Interface for reporting values in callbacks
 //
 // # Default Provider
 //
@@ -73,6 +79,30 @@
 //
 //	// Create an instrument
 //	instrument, _ := telemetry.ContextMeter(ctx, true).NewInstrument("requests_total", telemetry.InstrumentTypeCounter, telemetry.CounterTypeMonotonic)
+//
+// # Async Instruments
+//
+// Create callback-based instruments for values that are observed periodically:
+//
+//	// Observable counter with callback
+//	callback := func(ctx context.Context, obs telemetry.Observer[int64]) {
+//	    obs.Observe(getCurrentCount())
+//	}
+//	obsCounter, _ := meter.NewInstrument("active_connections",
+//	    telemetry.InstrumentTypeObservableCounter,
+//	    telemetry.CounterTypeMonotonic,
+//	    callback)
+//
+//	// Observable gauge
+//	gaugeCallback := func(ctx context.Context, obs telemetry.Observer[float64]) {
+//	    obs.Observe(getCPUUsage())
+//	}
+//	obsGauge, _ := meter.NewInstrument("cpu_usage",
+//	    telemetry.InstrumentTypeObservableGauge,
+//	    gaugeCallback)
+//
+//	// Unregister when done
+//	obsCounter.(telemetry.ObservableInstrument).Unregister()
 //
 // # Context Propagation
 //

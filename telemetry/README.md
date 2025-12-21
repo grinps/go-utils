@@ -22,7 +22,11 @@ The package is organized around these core concepts:
 | **Tracer** | Creates and manages Spans for distributed tracing |
 | **Span** | Represents a unit of work with timing, attributes, and events |
 | **Meter** | Creates metric instruments for measuring application behavior |
-| **Instrument** | Base interface for all metric instruments |
+| **Instrument** | Marker interface for all metric instruments |
+| **Counter** | Synchronous instrument for increments/decrements |
+| **Recorder** | Synchronous instrument for point-in-time values |
+| **ObservableCounter** | Async instrument for callback-based counter observations |
+| **ObservableGauge** | Async instrument for callback-based gauge observations |
 
 ## Quick Start
 
@@ -188,6 +192,36 @@ histogram, _ := meter.NewInstrument[telemetry.Recorder[int64]]("request_duration
 )
 ```
 
+### Async Instruments
+
+Async instruments use callbacks to report values when the metric system collects:
+
+```go
+// Observable counter with callback
+callback := telemetry.Callback[int64](func(ctx context.Context, obs telemetry.Observer[int64]) {
+    obs.Observe(getCurrentConnectionCount())
+})
+obsCounter, _ := meter.NewInstrument("active_connections",
+    telemetry.InstrumentTypeObservableCounter,
+    telemetry.CounterTypeMonotonic,
+    callback,
+)
+
+// Observable gauge
+gaugeCallback := telemetry.Callback[float64](func(ctx context.Context, obs telemetry.Observer[float64]) {
+    obs.Observe(getCPUUsage())
+})
+obsGauge, _ := meter.NewInstrument("cpu_usage",
+    telemetry.InstrumentTypeObservableGauge,
+    gaugeCallback,
+)
+
+// Unregister when done
+if obs, ok := obsCounter.(telemetry.ObservableInstrument); ok {
+    obs.Unregister()
+}
+```
+
 ## Error Handling
 
 The package provides structured error handling through error codes:
@@ -277,9 +311,33 @@ type Meter interface {
 
 ```go
 type Instrument interface {
-    Name() string
-    Description() string
-    Unit() string
+    Instrument() // Marker method
+}
+
+type Counter[T Number] interface {
+    Instrument
+    IsMonotonic() bool
+    Precision() Precision
+    Add(ctx context.Context, value T, attrs ...any)
+}
+
+type Recorder[T Number] interface {
+    Instrument
+    IsAggregating() bool
+    AggregationStrategy() AggregationStrategy
+    Precision() Precision
+    Record(ctx context.Context, value T, attrs ...any)
+}
+
+type ObservableCounter[T Number] interface {
+    ObservableInstrument
+    IsMonotonic() bool
+    Precision() Precision
+}
+
+type ObservableGauge[T Number] interface {
+    ObservableInstrument
+    Precision() Precision
 }
 ```
 
