@@ -649,3 +649,219 @@ func TestSetValueNilConfig(t *testing.T) {
 		t.Error("Expected error for nil config")
 	}
 }
+
+func TestSetAsDefault(t *testing.T) {
+	ctx := context.Background()
+	data := map[string]any{
+		"custom": map[string]any{
+			"key": "custom-value",
+		},
+	}
+	customCfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+
+	// Save original default to restore later
+	originalDefault := config.Default()
+	defer config.SetAsDefault(originalDefault)
+
+	// Set custom config as default
+	config.SetAsDefault(customCfg)
+
+	// Verify default was changed
+	newDefault := config.Default()
+	val, err := newDefault.GetValue(ctx, "custom.key")
+	if err != nil {
+		t.Errorf("GetValue failed: %v", err)
+	}
+	strVal, ok := val.(string)
+	if !ok || strVal != "custom-value" {
+		t.Errorf("Expected 'custom-value', got %v", val)
+	}
+
+	// Test that ContextConfig uses new default when no config in context
+	cfg := config.ContextConfig(ctx, true)
+	val, err = cfg.GetValue(ctx, "custom.key")
+	if err != nil {
+		t.Errorf("GetValue from context default failed: %v", err)
+	}
+	strVal, ok = val.(string)
+	if !ok || strVal != "custom-value" {
+		t.Errorf("Expected 'custom-value', got %v", val)
+	}
+}
+
+func TestGetValueWithConfig(t *testing.T) {
+	ctx := context.Background()
+	data := map[string]any{
+		"server": map[string]any{
+			"port": 9090,
+			"host": "example.com",
+		},
+	}
+	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+
+	// Test successful retrieval
+	var port int
+	err := config.GetValueWithConfig(ctx, cfg, "server.port", &port)
+	if err != nil {
+		t.Errorf("GetValueWithConfig failed: %v", err)
+	}
+	if port != 9090 {
+		t.Errorf("Expected 9090, got %v", port)
+	}
+
+	// Test with string
+	var host string
+	err = config.GetValueWithConfig(ctx, cfg, "server.host", &host)
+	if err != nil {
+		t.Errorf("GetValueWithConfig failed: %v", err)
+	}
+	if host != "example.com" {
+		t.Errorf("Expected 'example.com', got %v", host)
+	}
+
+	// Test with nil config
+	err = config.GetValueWithConfig[int](ctx, nil, "server.port", &port)
+	if err == nil {
+		t.Error("Expected error for nil config")
+	}
+
+	// Test with nil return value
+	err = config.GetValueWithConfig[int](ctx, cfg, "server.port", nil)
+	if err == nil {
+		t.Error("Expected error for nil return value")
+	}
+
+	// Test with empty key
+	err = config.GetValueWithConfig(ctx, cfg, "", &port)
+	if err == nil {
+		t.Error("Expected error for empty key")
+	}
+
+	// Test with missing key
+	var missing string
+	err = config.GetValueWithConfig(ctx, cfg, "missing.key", &missing)
+	if err == nil {
+		t.Error("Expected error for missing key")
+	}
+
+	// Test type mismatch
+	var wrongType string
+	err = config.GetValueWithConfig(ctx, cfg, "server.port", &wrongType)
+	if err == nil {
+		t.Error("Expected error for type mismatch")
+	}
+}
+
+func TestGetConfig(t *testing.T) {
+	ctx := context.Background()
+	data := map[string]any{
+		"database": map[string]any{
+			"primary": map[string]any{
+				"host": "primary.db.com",
+				"port": 5432,
+			},
+		},
+	}
+	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+	ctxWithCfg := config.ContextWithConfig(ctx, cfg)
+
+	// Test successful retrieval
+	dbCfg, err := config.GetConfig(ctxWithCfg, "database")
+	if err != nil {
+		t.Errorf("GetConfig failed: %v", err)
+	}
+
+	val, err := dbCfg.GetValue(ctx, "primary.host")
+	if err != nil {
+		t.Errorf("GetValue on sub-config failed: %v", err)
+	}
+	host, ok := val.(string)
+	if !ok || host != "primary.db.com" {
+		t.Errorf("Expected 'primary.db.com', got %v", val)
+	}
+
+	// Test with missing key
+	_, err = config.GetConfig(ctxWithCfg, "missing")
+	if err == nil {
+		t.Error("Expected error for missing key")
+	}
+}
+
+func TestGetConfigWithConfig(t *testing.T) {
+	ctx := context.Background()
+	data := map[string]any{
+		"services": map[string]any{
+			"api": map[string]any{
+				"endpoint": "https://api.example.com",
+				"timeout":  30,
+			},
+		},
+		"scalar": "not-a-map",
+	}
+	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+
+	// Test successful retrieval
+	apiCfg, err := config.GetConfigWithConfig(ctx, cfg, "services.api")
+	if err != nil {
+		t.Errorf("GetConfigWithConfig failed: %v", err)
+	}
+
+	val, err := apiCfg.GetValue(ctx, "endpoint")
+	if err != nil {
+		t.Errorf("GetValue on sub-config failed: %v", err)
+	}
+	endpoint, ok := val.(string)
+	if !ok || endpoint != "https://api.example.com" {
+		t.Errorf("Expected 'https://api.example.com', got %v", val)
+	}
+
+	// Test with nil config
+	_, err = config.GetConfigWithConfig(ctx, nil, "services")
+	if err == nil {
+		t.Error("Expected error for nil config")
+	}
+
+	// Test with empty key
+	_, err = config.GetConfigWithConfig(ctx, cfg, "")
+	if err == nil {
+		t.Error("Expected error for empty key")
+	}
+
+	// Test with missing key
+	_, err = config.GetConfigWithConfig(ctx, cfg, "missing.key")
+	if err == nil {
+		t.Error("Expected error for missing key")
+	}
+
+	// Test with non-map value
+	_, err = config.GetConfigWithConfig(ctx, cfg, "scalar")
+	if err == nil {
+		t.Error("Expected error for non-map value")
+	}
+}
+
+func TestGetValueEWithEmptyKey(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.NewSimpleConfig(ctx)
+	ctxWithCfg := config.ContextWithConfig(ctx, cfg)
+
+	var val string
+	err := config.GetValueE(ctxWithCfg, "", &val)
+	if err == nil {
+		t.Error("Expected error for empty key")
+	}
+}
+
+func TestContextConfigNilContext(t *testing.T) {
+	// Test with nil context and defaultIfNotAvailable=true
+	cfg := config.ContextConfig(nil, true)
+	if cfg == nil {
+		t.Error("Expected default config when context is nil and defaultIfNotAvailable=true")
+	}
+
+	// Test with nil context and defaultIfNotAvailable=false
+	cfg = config.ContextConfig(nil, false)
+	if cfg != nil {
+		t.Error("Expected nil config when context is nil and defaultIfNotAvailable=false")
+	}
+}

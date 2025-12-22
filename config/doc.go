@@ -129,6 +129,30 @@
 //	var value string
 //	config.GetValueE(ctx, "key", &value)
 //
+// # Setting Default Configuration
+//
+// Set a custom default configuration that is used when no config is in context:
+//
+//	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+//	config.SetAsDefault(cfg)
+//
+//	// Now ContextConfig(ctx, true) returns this config when no config in context
+//	defaultCfg := config.Default()
+//
+// # Explicit Config Functions
+//
+// For cases where you want to use a specific config without context:
+//
+//	// GetValueWithConfig - type-safe retrieval with explicit config
+//	var port int
+//	err := config.GetValueWithConfig(ctx, cfg, "server.port", &port)
+//
+//	// GetConfigWithConfig - get nested config with explicit config
+//	serverCfg, err := config.GetConfigWithConfig(ctx, cfg, "server")
+//
+//	// GetConfig - get nested config from context
+//	serverCfg, err := config.GetConfig(ctx, "server")
+//
 // # Testing
 //
 // The SimpleConfig implementation is ideal for testing:

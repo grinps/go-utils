@@ -7,6 +7,18 @@ import (
 
 var defaultConfig Config = NewSimpleConfig(context.Background())
 
+// SetAsDefault sets the provided Config as the package-level default configuration.
+// This default is used when ContextConfig is called with defaultIfNotAvailable=true
+// and no config is found in the context.
+//
+// Example:
+//
+//	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+//	config.SetAsDefault(cfg)
+func SetAsDefault(cfg Config) {
+	defaultConfig = cfg
+}
+
 // GetValueE retrieves a configuration value from the context and stores it in returnValue.
 // If returnValue already contains a value, it acts as the default and is preserved if the key is not found.
 // Returns an error if:
@@ -21,6 +33,24 @@ var defaultConfig Config = NewSimpleConfig(context.Background())
 //	err := config.GetValueE(ctx, "server.log_path", &path)
 //	// path will be "./logs" if key not found, or the configured value if found
 func GetValueE[T any](ctx context.Context, key string, returnValue *T) error {
+	applicableConfig := ContextConfig(ctx, true)
+	return GetValueWithConfig(ctx, applicableConfig, key, returnValue)
+}
+
+// GetValueWithConfig retrieves a configuration value from the provided config and stores it in returnValue.
+// If returnValue already contains a value, it acts as the default and is preserved if the key is not found.
+// Returns an error if:
+//   - The returnValue pointer is nil
+//   - The key is empty
+//   - The config is nil
+//   - The value cannot be converted to type T
+//
+// Example:
+//
+//	path := "./logs" // default value
+//	err := config.GetValueWithConfig(ctx, cfg, "server.log_path", &path)
+//	// path will be "./logs" if key not found, or the configured value if found
+func GetValueWithConfig[T any](ctx context.Context, cfg Config, key string, returnValue *T) error {
 	if returnValue == nil {
 		return ErrConfigNilReturnValue.New("nil return value", "key", key)
 	}
@@ -29,13 +59,12 @@ func GetValueE[T any](ctx context.Context, key string, returnValue *T) error {
 		return ErrConfigEmptyKey.New("empty key", "key", key)
 	}
 
-	applicableConfig := ContextConfig(ctx, true)
-	if applicableConfig == nil {
+	if cfg == nil {
 		return ErrConfigNilConfig.New("nil config", "key", key)
 	}
 
 	// Get the value
-	val, err := applicableConfig.GetValue(ctx, key)
+	val, err := cfg.GetValue(ctx, key)
 	if err != nil {
 		return err
 	}
@@ -102,4 +131,42 @@ func ContextConfig(ctx context.Context, defaultIfNotAvailable bool) Config {
 //	val, err := cfg.GetValue(ctx, "key")
 func Default() Config {
 	return defaultConfig
+}
+
+// GetConfig retrieves a nested configuration from the context config at the given key.
+// The value at the key must be convertible to a configuration map.
+//
+// Example:
+//
+//	ctx = config.ContextWithConfig(ctx, cfg)
+//	serverCfg, err := config.GetConfig(ctx, "server")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	val, _ := serverCfg.GetValue(ctx, "port")
+func GetConfig(ctx context.Context, key string) (Config, error) {
+	applicableConfig := ContextConfig(ctx, true)
+	return GetConfigWithConfig(ctx, applicableConfig, key)
+}
+
+// GetConfigWithConfig retrieves a nested configuration from the provided config at the given key.
+// The value at the key must be convertible to a configuration map.
+//
+// Example:
+//
+//	serverCfg, err := config.GetConfigWithConfig(ctx, cfg, "server")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	val, _ := serverCfg.GetValue(ctx, "port")
+func GetConfigWithConfig(ctx context.Context, cfg Config, key string) (Config, error) {
+	if cfg == nil {
+		return nil, ErrConfigNilConfig.New("nil config", "key", key)
+	}
+
+	if key == "" {
+		return nil, ErrConfigEmptyKey.New("empty key", "key", key)
+	}
+
+	return cfg.GetConfig(ctx, key)
 }

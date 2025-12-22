@@ -11,7 +11,7 @@ The `config` package provides a flexible, context-aware configuration management
 - **Dot-Notation Keys**: Access nested values using dot notation (e.g., `server.port`).
 - **Simple In-Memory Implementation**: Includes `SimpleConfig` for easy testing and mocking.
 - **Structured Error Handling**: Uses `errext` package for rich error information.
-- **High Test Coverage**: >93% test coverage with comprehensive edge case handling.
+- **High Test Coverage**: >95% test coverage with comprehensive edge case handling.
 
 ## Installation
 
@@ -146,6 +146,22 @@ func ContextConfig(ctx context.Context, defaultIfNotAvailable bool) Config
 
 // Default returns the package-level default Config
 func Default() Config
+
+// SetAsDefault sets a custom default Config
+func SetAsDefault(cfg Config)
+```
+
+### Explicit Config Functions
+
+```go
+// GetValueWithConfig retrieves a value from a specific config (not from context)
+func GetValueWithConfig[T any](ctx context.Context, cfg Config, key string, returnValue *T) error
+
+// GetConfig retrieves a nested config from context
+func GetConfig(ctx context.Context, key string) (Config, error)
+
+// GetConfigWithConfig retrieves a nested config from a specific config
+func GetConfigWithConfig(ctx context.Context, cfg Config, key string) (Config, error)
 ```
 
 ## Error Handling
@@ -250,9 +266,48 @@ if err := config.GetValueE(ctx, "database.host", &dbHost); err != nil {
 }
 ```
 
+### Example 4: Custom Default Configuration
+
+```go
+// Set a custom default configuration at application startup
+data := map[string]any{
+    "app": map[string]any{
+        "name": "my-app",
+        "env":  "production",
+    },
+}
+cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+config.SetAsDefault(cfg)
+
+// Now any code that uses ContextConfig with defaultIfNotAvailable=true
+// will get this custom config when no config is in context
+```
+
+### Example 5: Using Explicit Config Functions
+
+```go
+// When you have multiple configs and need to use a specific one
+primaryCfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(primaryData))
+backupCfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(backupData))
+
+// Use GetValueWithConfig for explicit config retrieval
+var port int
+if err := config.GetValueWithConfig(ctx, primaryCfg, "server.port", &port); err != nil {
+    // Fallback to backup config
+    _ = config.GetValueWithConfig(ctx, backupCfg, "server.port", &port)
+}
+
+// Get nested config sections
+serverCfg, err := config.GetConfigWithConfig(ctx, primaryCfg, "server")
+if err != nil {
+    log.Fatal(err)
+}
+val, _ := serverCfg.GetValue(ctx, "host")
+```
+
 ## Testing
 
-The package includes comprehensive tests with >93% coverage:
+The package includes comprehensive tests with >95% coverage:
 
 ```bash
 cd config
