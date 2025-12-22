@@ -717,7 +717,8 @@ A vendor-agnostic API for application observability including distributed tracin
 #### Features
 - **Provider Interface** - Entry point for creating Tracers and Meters
 - **Distributed Tracing** - Span-based tracing with context propagation
-- **Metrics Collection** - Counter and Recorder instruments for metrics
+- **Metrics Collection** - Counter, Recorder, and Observable instruments
+- **Async Instruments** - ObservableCounter and ObservableGauge with callback pattern
 - **Context Integration** - Store and retrieve providers from context
 - **Default Provider** - NoopProvider for graceful degradation
 - **Error Handling Strategy** - Configurable error handling for testing
@@ -754,6 +755,12 @@ type Span interface {
 type Meter interface {
     NewInstrument(name string, opts ...any) (Instrument, error)
 }
+
+// Observable instruments with callback pattern
+type Callback[T int64 | float64] func(ctx context.Context, observer Observer[T])
+type Observer[T int64 | float64] interface {
+    Observe(value T, attrs ...any)
+}
 ```
 
 #### Quick Example
@@ -784,6 +791,14 @@ func main() {
     counter, _ := meter.NewInstrument("requests_total",
         telemetry.InstrumentTypeCounter,
         telemetry.CounterTypeMonotonic,
+    )
+    
+    // Create observable gauge with callback
+    gauge, _ := meter.NewInstrument("memory_usage",
+        telemetry.InstrumentTypeObservableGauge,
+        telemetry.WithCallback(func(ctx context.Context, obs telemetry.Observer[int64]) {
+            obs.Observe(getCurrentMemory())
+        }),
     )
 }
 ```
@@ -836,7 +851,8 @@ An in-memory implementation of the telemetry interfaces for testing and developm
 - **Test Assertions** - Access recorded spans and metrics for test verification
 - **Thread Safe** - All operations are safe for concurrent use
 - **Span Relationships** - Support for parent-child span relationships
-- **Generic Instruments** - Counter[T] and Recorder[T] implementations
+- **Generic Instruments** - Counter[T], Recorder[T], ObservableCounter[T], and ObservableGauge[T]
+- **Observable Instruments** - Async instruments with callback-based observation
 - **Key-Value Options** - Minimal dependency usage with string key-value pairs
 
 #### Quick Example
@@ -909,6 +925,98 @@ span.AddEvent("cache-hit", "cache.key", "user:123")
 - `Meter` - In-memory meter with measurement recording
 - `Counter[T]` - Generic counter instrument
 - `Recorder[T]` - Generic recorder instrument
+- `ObservableCounter[T]` - Async counter with callback registration
+- `ObservableGauge[T]` - Async gauge with callback registration
+
+---
+
+### 13. Telemetry OTEL Package
+
+**Import:** `github.com/grinps/go-utils/telemetry/otel`
+
+An OpenTelemetry-based implementation of the telemetry interfaces using `go.opentelemetry.io/contrib/otelconf` for declarative configuration.
+
+#### Features
+- **Full Provider Implementation** - Complete `telemetry.Provider` using OpenTelemetry SDK
+- **Declarative Configuration** - Uses otelconf.OpenTelemetryConfiguration schema
+- **Config Package Integration** - Load configuration via `config.Config` with YAML parsing
+- **OTLP Export** - Built-in support for OTLP gRPC and HTTP exporters
+- **Embedded Types** - Tracer and Meter embed their OpenTelemetry counterparts
+- **Observable Instruments** - Full support for async metrics with unified observer pattern
+- **Resource Configuration** - Service name, namespace, version via `attributes_list`
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/config"
+    "github.com/grinps/go-utils/config/ext"
+    "github.com/grinps/go-utils/telemetry/otel"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create config with OTLP gRPC exporter
+    cfg := ext.NewConfigWrapper(config.NewSimpleConfig(ctx, config.WithConfigurationMap(map[string]any{
+        "opentelemetry": map[string]any{
+            "file_format": "0.3",
+            "resource": map[string]any{
+                "attributes_list": "service.name=my-service,service.version=1.0.0",
+            },
+            "tracer_provider": map[string]any{
+                "processors": []any{
+                    map[string]any{
+                        "batch": map[string]any{
+                            "exporter": map[string]any{
+                                "otlp_grpc": map[string]any{
+                                    "endpoint": "localhost:4317",
+                                    "insecure": true,
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    })))
+    
+    // Create provider from config
+    provider, err := otel.NewProviderFromConfig(ctx, cfg)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer provider.Shutdown(ctx)
+    
+    // Use tracer
+    tracer, _ := provider.Tracer("my-service")
+    ctx, span := tracer.Start(ctx, "operation")
+    defer span.End()
+}
+```
+
+#### Integration Testing
+
+```bash
+# Start OpenTelemetry Collector
+docker run \
+  -p 127.0.0.1:4317:4317 \
+  -p 127.0.0.1:4318:4318 \
+  --name otel-collector \
+  otel/opentelemetry-collector:0.141.0 \
+  --config /etc/otelcol/config.yaml \
+  --config 'yaml:service::pipelines::metrics::receivers: [otlp]'
+
+# Run integration tests
+go test -tags=integration ./...
+```
+
+#### Key Functions
+- `NewProvider(ctx, opts...)` - Create with options
+- `NewProviderFromConfig(ctx, config.Config)` - Create from config (recommended)
+- `LoadConfiguration(ctx, config.Config)` - Load otelconf config using YAML + ParseYAML
+- `DefaultConfiguration()` - Get default configuration
 
 ---
 
@@ -933,7 +1041,8 @@ go test ./platform/...
 - **Config Package**: 93.3%
 - **Config Ext Package**: 96.4%
 - **Telemetry Package**: 100%
-- **Telemetry Memory Package**: 97.6%
+- **Telemetry Memory Package**: 97.4%
+- **Telemetry OTEL Package**: 80.1%
 - **System Package**: Comprehensive unit tests
 - **GoSub Package**: Selection and event tests
 - **Registry Package**: Generic type tests
@@ -1011,6 +1120,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | **config/koanf** | Koanf wrapper for Config interfaces | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/koanf.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/koanf) |
 | **telemetry** | Observability API (tracing & metrics) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry) |
 | **telemetry/memory** | In-memory telemetry for testing | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/memory.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/memory) |
+| **telemetry/otel** | OpenTelemetry implementation | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/otel.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/otel) |
 
 ---
 
@@ -1031,6 +1141,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | `config/koanf` | Koanf wrapper | `KoanfConfig` |
 | `telemetry` | Observability | `Provider`, `Tracer`, `Meter` |
 | `telemetry/memory` | In-memory telemetry | `Provider`, `RecordedSpan`, `Meter` |
+| `telemetry/otel` | OpenTelemetry impl | `Provider`, `Tracer`, `Meter` |
 
 ---
 
@@ -1228,6 +1339,11 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 
 ### Telemetry Memory Package
 
+#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/telemetry/memory/v0.2.0) (December 2025)
+- ✅ **Observable Instruments** - Added `ObservableCounter[T]` and `ObservableGauge[T]` with callback registration
+- ✅ **Unified Observer Pattern** - Single instrument field for memory-optimized async observation
+- ✅ **97.4% Test Coverage** - Comprehensive test suite including observable instruments
+
 #### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/telemetry/memory/v0.1.0) (December 2025)
 - ✅ **Initial Release** - In-memory telemetry implementation for testing
 - ✅ **Provider Implementation** - Full `telemetry.Provider` interface with recorded data access
@@ -1238,9 +1354,26 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 - ✅ **Key-Value Options** - Minimal dependency usage with string key-value pairs for options and attributes
 - ✅ **Thread Safe** - All operations safe for concurrent use
 - ✅ **NoopProvider Fallback** - Returns noop tracer/meter after shutdown
-- ✅ **97.6% Test Coverage** - Comprehensive test suite
 
 **Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/memory.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/memory)
+
+---
+
+### Telemetry OTEL Package
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/telemetry/otel/v0.1.0) (December 2025)
+- ✅ **Initial Release** - OpenTelemetry-based telemetry implementation
+- ✅ **Full Provider Implementation** - Complete `telemetry.Provider` using OpenTelemetry SDK
+- ✅ **Declarative Configuration** - Uses `otelconf.OpenTelemetryConfiguration` schema
+- ✅ **Config Integration** - Load config via `config.Config` with YAML + `otelconf.ParseYAML`
+- ✅ **OTLP gRPC Export** - Built-in support for OTLP gRPC exporter (`otlp_grpc`)
+- ✅ **Resource Configuration** - Service attributes via `attributes_list` format
+- ✅ **Embedded Types** - Tracer/Meter embed OpenTelemetry counterparts for direct SDK access
+- ✅ **Observable Instruments** - Full async metrics with unified observer pattern (memory-optimized)
+- ✅ **Integration Tests** - Tests with OpenTelemetry Collector (`-tags=integration`)
+- ✅ **80.1% Test Coverage** - Comprehensive test suite
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/otel.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/otel)
 
 ---
 
