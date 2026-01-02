@@ -8,9 +8,16 @@ import (
 // For example, "server.port" accesses config["server"]["port"].
 const DefaultKeyDelimiter = "."
 
+// ProviderName identifies the config instance name.
+type ProviderName string
+
 // Config defines the interface for configuration management.
 // Implementations should support nested configuration access via dot-notation keys.
 type Config interface {
+	// Name returns the name of the provider implementation (e.g., "SimpleConfig", "KoanfConfig").
+	// This may be used to provide additional context for the config instance.
+	Name() ProviderName
+
 	// GetValue retrieves a configuration value by key.
 	// Keys can use dot-notation for nested access (e.g., "server.port").
 	// Returns the value and an error if the key is empty or value is not found.

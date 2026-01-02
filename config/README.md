@@ -11,7 +11,8 @@ The `config` package provides a flexible, context-aware configuration management
 - **Dot-Notation Keys**: Access nested values using dot notation (e.g., `server.port`).
 - **Simple In-Memory Implementation**: Includes `SimpleConfig` for easy testing and mocking.
 - **Structured Error Handling**: Uses `errext` package for rich error information.
-- **High Test Coverage**: >95% test coverage with comprehensive edge case handling.
+- **Built-in Telemetry**: Integrated tracing and metrics via the `telemetry` package.
+- **High Test Coverage**: ~95% test coverage with comprehensive edge case handling.
 
 ## Installation
 
@@ -117,6 +118,9 @@ port := val.(int)
 
 ```go
 type Config interface {
+    // Name returns the provider name (e.g., "SimpleConfig", "KoanfConfig").
+    Name() ProviderName
+
     // GetValue retrieves a configuration value by key.
     // Returns the value and an error if the key is not found.
     GetValue(ctx context.Context, key string) (any, error)
@@ -305,9 +309,86 @@ if err != nil {
 val, _ := serverCfg.GetValue(ctx, "host")
 ```
 
+## Telemetry
+
+The config package includes built-in telemetry support using the `github.com/grinps/go-utils/telemetry` package. Telemetry automatically captures spans and metrics for all configuration operations.
+
+### Metrics
+
+The following metrics are automatically recorded:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `config.get_value.count` | Counter | Number of GetValue operations |
+| `config.get_value.duration_ms` | Histogram | Duration of GetValue operations |
+| `config.set_value.count` | Counter | Number of SetValue operations |
+| `config.set_value.duration_ms` | Histogram | Duration of SetValue operations |
+| `config.get_config.count` | Counter | Number of GetConfig operations |
+| `config.get_config.duration_ms` | Histogram | Duration of GetConfig operations |
+| `config.unmarshal.count` | Counter | Number of Unmarshal operations |
+| `config.unmarshal.duration_ms` | Histogram | Duration of Unmarshal operations |
+| `config.errors.count` | Counter | Number of errors across all operations |
+
+### Attributes
+
+All telemetry includes these attributes:
+
+- `config.key_prefix` - First segment of the key (for cardinality control)
+- `config.impl_type` - Implementation name (e.g., "SimpleConfig")
+- `config.success` - Whether the operation succeeded
+- `config.error_code` - Error code (when applicable)
+- `config.target_type` - Target struct type (for Unmarshal operations)
+
+### Controlling Telemetry
+
+```go
+// Disable telemetry globally
+config.SetTelemetryEnabled(false)
+
+// Check if telemetry is enabled
+if config.IsTelemetryEnabled() {
+    // telemetry is active
+}
+
+// Re-enable telemetry
+config.SetTelemetryEnabled(true)
+```
+
+### TelemetryAware Interface
+
+Custom Config implementations can implement `TelemetryAware` for fine-grained control:
+
+```go
+type TelemetryAware interface {
+    // ShouldInstrument allows opting out of telemetry for specific operations
+    ShouldInstrument(ctx context.Context, key string, op string) bool
+
+    // GenerateTelemetryAttributes allows adding custom attributes
+    GenerateTelemetryAttributes(ctx context.Context, op string, attrs []any) []any
+}
+```
+
+Example implementation:
+
+```go
+type MyConfig struct {
+    // ...
+}
+
+func (c *MyConfig) ShouldInstrument(ctx context.Context, key, op string) bool {
+    // Skip telemetry for sensitive keys
+    return !strings.HasPrefix(key, "secrets.")
+}
+
+func (c *MyConfig) GenerateTelemetryAttributes(ctx context.Context, op string, attrs []any) []any {
+    // Add custom attributes
+    return append(attrs, "config.source", "etcd", "config.version", "v2")
+}
+```
+
 ## Testing
 
-The package includes comprehensive tests with >95% coverage:
+The package includes comprehensive tests with ~95% coverage:
 
 ```bash
 cd config

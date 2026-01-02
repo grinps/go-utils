@@ -51,31 +51,45 @@ func GetValueE[T any](ctx context.Context, key string, returnValue *T) error {
 //	err := config.GetValueWithConfig(ctx, cfg, "server.log_path", &path)
 //	// path will be "./logs" if key not found, or the configured value if found
 func GetValueWithConfig[T any](ctx context.Context, cfg Config, key string, returnValue *T) error {
+	// Start telemetry
+	ctx, state := startTelemetry(ctx, cfg, "get_value", key)
+
+	// Validation
 	if returnValue == nil {
-		return ErrConfigNilReturnValue.New("nil return value", "key", key)
+		err := ErrConfigNilReturnValue.New("nil return value", "key", key)
+		finishTelemetry(ctx, state, err)
+		return err
 	}
 
 	if key == "" {
-		return ErrConfigEmptyKey.New("empty key", "key", key)
+		err := ErrConfigEmptyKey.New("empty key", "key", key)
+		finishTelemetry(ctx, state, err)
+		return err
 	}
 
 	if cfg == nil {
-		return ErrConfigNilConfig.New("nil config", "key", key)
+		err := ErrConfigNilConfig.New("nil config", "key", key)
+		finishTelemetry(ctx, state, err)
+		return err
 	}
 
 	// Get the value
 	val, err := cfg.GetValue(ctx, key)
 	if err != nil {
+		finishTelemetry(ctx, state, err)
 		return err
 	}
 
 	// Type assertion and assignment
 	typedVal, ok := val.(T)
 	if !ok {
-		return ErrConfigInvalidValueType.New("value type mismatch", "key", key, "expected_type", reflect.TypeOf(returnValue).Elem().String(), "actual_type", reflect.TypeOf(val).String())
+		err := ErrConfigInvalidValueType.New("value type mismatch", "key", key, "expected_type", reflect.TypeOf(returnValue).Elem().String(), "actual_type", reflect.TypeOf(val).String())
+		finishTelemetry(ctx, state, err)
+		return err
 	}
 
 	*returnValue = typedVal
+	finishTelemetry(ctx, state, nil)
 	return nil
 }
 
@@ -160,13 +174,22 @@ func GetConfig(ctx context.Context, key string) (Config, error) {
 //	}
 //	val, _ := serverCfg.GetValue(ctx, "port")
 func GetConfigWithConfig(ctx context.Context, cfg Config, key string) (Config, error) {
+	// Start telemetry
+	ctx, state := startTelemetry(ctx, cfg, "get_config", key)
+
 	if cfg == nil {
-		return nil, ErrConfigNilConfig.New("nil config", "key", key)
+		err := ErrConfigNilConfig.New("nil config", "key", key)
+		finishTelemetry(ctx, state, err)
+		return nil, err
 	}
 
 	if key == "" {
-		return nil, ErrConfigEmptyKey.New("empty key", "key", key)
+		err := ErrConfigEmptyKey.New("empty key", "key", key)
+		finishTelemetry(ctx, state, err)
+		return nil, err
 	}
 
-	return cfg.GetConfig(ctx, key)
+	result, err := cfg.GetConfig(ctx, key)
+	finishTelemetry(ctx, state, err)
+	return result, err
 }

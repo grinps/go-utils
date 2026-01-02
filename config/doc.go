@@ -4,8 +4,8 @@
 // # Overview
 //
 // The config package supports nested configuration maps accessed via dot-notation keys,
-// type-safe retrieval with compile-time guarantees, and structured error handling via
-// the errext package.
+// type-safe retrieval with compile-time guarantees, structured error handling via
+// the errext package, and built-in telemetry support.
 //
 // # Basic Usage
 //
@@ -184,4 +184,35 @@
 // SimpleConfig is not thread-safe for concurrent reads and writes. If you need to
 // modify configuration at runtime from multiple goroutines, add appropriate
 // synchronization or use an immutable configuration pattern.
+//
+// # Telemetry
+//
+// The package includes built-in telemetry support for tracing and metrics. All
+// configuration operations automatically capture spans and record metrics when
+// telemetry is enabled.
+//
+// Control telemetry globally:
+//
+//	config.SetTelemetryEnabled(false) // Disable telemetry
+//	config.SetTelemetryEnabled(true)  // Re-enable telemetry
+//	if config.IsTelemetryEnabled() {
+//	    // telemetry is active
+//	}
+//
+// Custom Config implementations can implement the TelemetryAware interface for
+// fine-grained control over instrumentation and custom attributes.
+//
+// # Config Interface
+//
+// All Config implementations must provide a Name() method that returns a ProviderName.
+// This identifier is used for telemetry attributes and debugging:
+//
+//	type Config interface {
+//	    Name() ProviderName
+//	    GetValue(ctx context.Context, key string) (any, error)
+//	    GetConfig(ctx context.Context, key string) (Config, error)
+//	}
+//
+// The ProviderName type is a string alias that identifies the config implementation
+// (e.g., "SimpleConfig", "KoanfConfig").
 package config

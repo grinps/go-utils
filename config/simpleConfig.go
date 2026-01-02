@@ -15,6 +15,12 @@ type simpleConfig struct {
 	delimiter        string
 }
 
+// Name returns the provider name for SimpleConfig.
+// This implements the Config interface's Name() method.
+func (cfg *simpleConfig) Name() ProviderName {
+	return "SimpleConfig"
+}
+
 // GetValue retrieves a value from the configuration using dot-notation keys.
 // Returns the value and an error if the config is nil, the key is empty, or the value is not found.
 //
