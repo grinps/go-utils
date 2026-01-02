@@ -9,6 +9,7 @@
 // # Features
 //
 //   - Implements config.Config, config.MutableConfig, and config.MarshableConfig interfaces
+//   - Implements config.TelemetryAware for telemetry integration
 //   - Support for multiple configuration sources (files, env vars, command-line flags, etc.)
 //   - Nested configuration access via dot-notation keys
 //   - Type-safe unmarshalling to structs with multiple tag support (koanf, json, yaml, mapstructure)
@@ -16,7 +17,7 @@
 //   - Provider-based configuration loading with parsers
 //   - Configuration merging from multiple sources
 //   - Structured error handling using errext package
-//   - High test coverage (>96%)
+//   - High test coverage (>94%)
 //
 // # Basic Usage
 //
@@ -208,4 +209,10 @@
 //	var cfg config.Config = koanf.NewKoanfConfig(ctx)
 //
 // This allows seamless integration with code that expects these interfaces.
+//
+// # Telemetry Support
+//
+// KoanfConfig implements config.TelemetryAware interface:
+//   - ShouldInstrument() always returns true (telemetry enabled)
+//   - GenerateTelemetryAttributes() returns attributes as-is
 package koanf

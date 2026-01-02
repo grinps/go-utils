@@ -37,6 +37,24 @@ var (
 	_ config.MarshableConfig = (*KoanfConfig)(nil)
 )
 
+// Name returns the provider name for KoanfConfig.
+// Implements config.Config interface.
+func (k *KoanfConfig) Name() config.ProviderName {
+	return "KoanfConfig"
+}
+
+// ShouldInstrument always returns true for KoanfConfig.
+// Implements config.TelemetryAware interface.
+func (k *KoanfConfig) ShouldInstrument(ctx context.Context, key string, op string) bool {
+	return true
+}
+
+// GenerateTelemetryAttributes returns the attributes as-is.
+// Implements config.TelemetryAware interface.
+func (k *KoanfConfig) GenerateTelemetryAttributes(ctx context.Context, op string, attrs []any) []any {
+	return attrs
+}
+
 // GetValue retrieves a configuration value by key using dot-notation.
 // Returns the value and an error if the key is empty or value is not found.
 //

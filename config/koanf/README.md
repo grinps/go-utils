@@ -7,6 +7,7 @@ This package bridges the powerful koanf configuration library with the standardi
 ## Features
 
 - **Standard Interface Implementation**: Implements `config.Config`, `config.MutableConfig`, and `config.MarshableConfig`
+- **Telemetry Support**: Implements `config.TelemetryAware` for telemetry integration
 - **Multiple Configuration Sources**: Files, environment variables, command-line flags, S3, Consul, Vault, and more
 - **Nested Configuration**: Access nested values using dot-notation keys (customizable delimiter)
 - **Type-Safe Unmarshalling**: Unmarshal to structs with support for multiple tag formats (koanf, json, yaml, mapstructure)
@@ -14,7 +15,7 @@ This package bridges the powerful koanf configuration library with the standardi
 - **Provider-Based Loading**: Load from various sources using koanf's provider system
 - **Configuration Merging**: Merge multiple configurations with override support
 - **Structured Error Handling**: Uses `errext` package for rich error information
-- **High Test Coverage**: >96% test coverage with comprehensive edge case handling
+- **High Test Coverage**: >94% test coverage with comprehensive edge case handling
 
 ## Installation
 

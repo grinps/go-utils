@@ -820,3 +820,58 @@ func TestKoanfConfigImplementsInterfaces(t *testing.T) {
 func hasPrefix(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }
+
+func TestKoanfConfig_Name(t *testing.T) {
+	ctx := context.Background()
+	cfg, err := NewKoanfConfig(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	kCfg := cfg.(*KoanfConfig)
+	name := kCfg.Name()
+	if name != "KoanfConfig" {
+		t.Errorf("Expected name 'KoanfConfig', got '%s'", name)
+	}
+}
+
+func TestKoanfConfig_ShouldInstrument(t *testing.T) {
+	ctx := context.Background()
+	cfg, err := NewKoanfConfig(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	kCfg := cfg.(*KoanfConfig)
+
+	// ShouldInstrument should always return true
+	if !kCfg.ShouldInstrument(ctx, "any.key", "get_value") {
+		t.Error("Expected ShouldInstrument to return true")
+	}
+	if !kCfg.ShouldInstrument(ctx, "", "set_value") {
+		t.Error("Expected ShouldInstrument to return true for empty key")
+	}
+}
+
+func TestKoanfConfig_GenerateTelemetryAttributes(t *testing.T) {
+	ctx := context.Background()
+	cfg, err := NewKoanfConfig(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	kCfg := cfg.(*KoanfConfig)
+
+	attrs := []any{"key1", "value1", "key2", "value2"}
+	result := kCfg.GenerateTelemetryAttributes(ctx, "get_value", attrs)
+
+	// Should return attrs as-is
+	if len(result) != len(attrs) {
+		t.Errorf("Expected %d attrs, got %d", len(attrs), len(result))
+	}
+	for i, v := range attrs {
+		if result[i] != v {
+			t.Errorf("Expected attr[%d] = %v, got %v", i, v, result[i])
+		}
+	}
+}
