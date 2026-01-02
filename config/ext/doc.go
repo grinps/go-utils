@@ -5,7 +5,8 @@
 //
 // This package provides ConfigWrapper which wraps any config.Config and adds
 // consistent MarshableConfig and MutableConfig capabilities with mapstructure
-// fallback support.
+// fallback support. ConfigWrapper also implements config.TelemetryAware for
+// telemetry integration.
 //
 // # ConfigWrapper
 //
@@ -49,4 +50,10 @@
 //	if errors.Is(err, ext.ErrExtKeyNotFound) {
 //	    // Handle missing key
 //	}
+//
+// # Telemetry Support
+//
+// ConfigWrapper implements config.TelemetryAware interface:
+//   - ShouldInstrument() always returns true (telemetry enabled)
+//   - GenerateTelemetryAttributes() returns attributes as-is
 package ext

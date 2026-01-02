@@ -38,6 +38,24 @@ var (
 	_ config.MutableConfig   = (*ConfigWrapper)(nil)
 )
 
+// Name returns the provider name for ConfigWrapper.
+// Implements config.Config interface.
+func (w *ConfigWrapper) Name() config.ProviderName {
+	return "ConfigWrapper"
+}
+
+// ShouldInstrument always returns true for ConfigWrapper.
+// Implements config.TelemetryAware interface.
+func (w *ConfigWrapper) ShouldInstrument(ctx context.Context, key string, op string) bool {
+	return true
+}
+
+// GenerateTelemetryAttributes returns the attributes as-is.
+// Implements config.TelemetryAware interface.
+func (w *ConfigWrapper) GenerateTelemetryAttributes(ctx context.Context, op string, attrs []any) []any {
+	return attrs
+}
+
 // NewConfigWrapper creates a new ConfigWrapper that wraps the given config.
 // If the wrapped config already implements MarshableConfig or MutableConfig,
 // those implementations will be used. Otherwise, fallback behavior is provided.

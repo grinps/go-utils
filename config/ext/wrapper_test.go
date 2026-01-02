@@ -26,6 +26,10 @@ func newMockReadOnlyConfig(data map[string]any) *mockReadOnlyConfig {
 	return &mockReadOnlyConfig{data: data}
 }
 
+func (m *mockReadOnlyConfig) Name() config.ProviderName {
+	return "mockReadOnlyConfig"
+}
+
 func (m *mockReadOnlyConfig) GetValue(ctx context.Context, key string) (any, error) {
 	if key == "" {
 		return nil, config.ErrConfigEmptyKey.New("empty key")
@@ -55,6 +59,10 @@ type mockMutableConfig struct {
 
 func newMockMutableConfig(data map[string]any) *mockMutableConfig {
 	return &mockMutableConfig{data: data}
+}
+
+func (m *mockMutableConfig) Name() config.ProviderName {
+	return "mockMutableConfig"
 }
 
 func (m *mockMutableConfig) GetValue(ctx context.Context, key string) (any, error) {
@@ -99,6 +107,10 @@ type mockMarshableConfig struct {
 
 func newMockMarshableConfig(data map[string]any) *mockMarshableConfig {
 	return &mockMarshableConfig{data: data}
+}
+
+func (m *mockMarshableConfig) Name() config.ProviderName {
+	return "mockMarshableConfig"
 }
 
 func (m *mockMarshableConfig) GetValue(ctx context.Context, key string) (any, error) {
@@ -533,6 +545,10 @@ type mockAllConfigWrapper struct {
 	data map[string]any
 }
 
+func (m *mockAllConfigWrapper) Name() config.ProviderName {
+	return "mockAllConfigWrapper"
+}
+
 func (m *mockAllConfigWrapper) GetValue(ctx context.Context, key string) (any, error) {
 	if key == "" {
 		return m.data, nil
@@ -651,6 +667,10 @@ type mockRootErrorConfig struct {
 	data map[string]any
 }
 
+func (m *mockRootErrorConfig) Name() config.ProviderName {
+	return "mockRootErrorConfig"
+}
+
 func (m *mockRootErrorConfig) GetValue(ctx context.Context, key string) (any, error) {
 	if key == "" {
 		return nil, config.ErrConfigEmptyKey.New("empty key not supported")
@@ -691,6 +711,10 @@ func TestConfigWrapper_UnmarshalRootError(t *testing.T) {
 // mockRootNonMapConfig returns non-map value for root
 type mockRootNonMapConfig struct{}
 
+func (m *mockRootNonMapConfig) Name() config.ProviderName {
+	return "mockRootNonMapConfig"
+}
+
 func (m *mockRootNonMapConfig) GetValue(ctx context.Context, key string) (any, error) {
 	if key == "" {
 		return "not a map", nil // Return non-map value
@@ -719,6 +743,10 @@ type mockGetConfigErrorConfig struct {
 	data map[string]any
 }
 
+func (m *mockGetConfigErrorConfig) Name() config.ProviderName {
+	return "mockGetConfigErrorConfig"
+}
+
 func (m *mockGetConfigErrorConfig) GetValue(ctx context.Context, key string) (any, error) {
 	val, ok := m.data[key]
 	if !ok {
@@ -745,5 +773,49 @@ func TestConfigWrapper_UnmarshalGetConfigError(t *testing.T) {
 	err := wrapper.Unmarshal(ctx, "server", &server)
 	if err == nil {
 		t.Error("Expected error when GetConfig fails")
+	}
+}
+
+func TestConfigWrapper_Name(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.NewSimpleConfig(ctx)
+	wrapper := ext.NewConfigWrapper(cfg)
+
+	name := wrapper.Name()
+	if name != "ConfigWrapper" {
+		t.Errorf("Expected name 'ConfigWrapper', got '%s'", name)
+	}
+}
+
+func TestConfigWrapper_ShouldInstrument(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.NewSimpleConfig(ctx)
+	wrapper := ext.NewConfigWrapper(cfg)
+
+	// ShouldInstrument should always return true
+	if !wrapper.ShouldInstrument(ctx, "any.key", "get_value") {
+		t.Error("Expected ShouldInstrument to return true")
+	}
+	if !wrapper.ShouldInstrument(ctx, "", "set_value") {
+		t.Error("Expected ShouldInstrument to return true for empty key")
+	}
+}
+
+func TestConfigWrapper_GenerateTelemetryAttributes(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.NewSimpleConfig(ctx)
+	wrapper := ext.NewConfigWrapper(cfg)
+
+	attrs := []any{"key1", "value1", "key2", "value2"}
+	result := wrapper.GenerateTelemetryAttributes(ctx, "get_value", attrs)
+
+	// Should return attrs as-is
+	if len(result) != len(attrs) {
+		t.Errorf("Expected %d attrs, got %d", len(attrs), len(result))
+	}
+	for i, v := range attrs {
+		if result[i] != v {
+			t.Errorf("Expected attr[%d] = %v, got %v", i, v, result[i])
+		}
 	}
 }

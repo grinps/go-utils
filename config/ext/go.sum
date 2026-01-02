@@ -2,3 +2,5 @@ github.com/go-viper/mapstructure/v2 v2.2.1 h1:ZAaOCxANMuZx5RCeg0mBdEZk7DZasvvZIx
 github.com/go-viper/mapstructure/v2 v2.2.1/go.mod h1:oJDH3BJKyqBA2TXFhDsKDGDTlndYOZ6rGS0BRZIxGhM=
 github.com/grinps/go-utils/errext v0.8.0 h1:eIAeIEfRGsaIkvk81AEbGQJi24h4OT2oEKrmj3+Fbrk=
 github.com/grinps/go-utils/errext v0.8.0/go.mod h1:KV2N2bgaiwhzRw3ICNetCGYr7gZuhUEEg/27+mMzOFk=
+github.com/grinps/go-utils/telemetry v0.3.0 h1:1s0OJH/1IUBXqx9SnYlO7afzOaUSEbopc16BavTNDKw=
+github.com/grinps/go-utils/telemetry v0.3.0/go.mod h1:jFbYibTRUWVoauOiE3khnKs6mBoX5/DbZHKoDPE3n7w=

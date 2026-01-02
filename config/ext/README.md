@@ -8,6 +8,7 @@ The `ext` package provides extended configuration utilities that build upon the 
 - **Mapstructure Fallback**: Automatic fallback to mapstructure for configs that don't natively support unmarshalling
 - **Flexible Options**: Customizable unmarshalling behavior via functional options
 - **Type Conversions**: Automatic conversion of strings to durations, slices, and more
+- **Telemetry Support**: Implements `config.TelemetryAware` for telemetry integration
 - **High Test Coverage**: >96% test coverage
 
 ## Installation
@@ -121,6 +122,7 @@ type ConfigWrapper struct {
 }
 
 // Implements config.Config
+func (w *ConfigWrapper) Name() config.ProviderName
 func (w *ConfigWrapper) GetValue(ctx, key) (any, error)
 func (w *ConfigWrapper) GetConfig(ctx, key) (config.Config, error)
 
@@ -135,6 +137,10 @@ func (w *ConfigWrapper) Unwrap() config.Config
 func (w *ConfigWrapper) IsMutable() bool
 func (w *ConfigWrapper) IsMarshable() bool
 func (w *ConfigWrapper) All(ctx) map[string]any
+
+// Implements config.TelemetryAware
+func (w *ConfigWrapper) ShouldInstrument(ctx, key, op) bool
+func (w *ConfigWrapper) GenerateTelemetryAttributes(ctx, op, attrs) []any
 ```
 
 ## Options Reference
