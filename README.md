@@ -15,6 +15,7 @@ The `base-utils` library provides a set of well-tested, production-ready utiliti
 - **Generic Registry** - Type-safe registry with comparable keys
 - **Extended Error Handling** - Structured error generation, categorization, and templating
 - **Configuration Management** - Flexible, context-aware configuration management with extensions for struct unmarshalling, mutable configs, context-based config discovery, and koanf integration for multi-source configuration loading
+- **Telemetry** - Vendor-agnostic observability API for distributed tracing and metrics collection
 
 ## Installation
 
@@ -707,6 +708,318 @@ func main() {
 
 ---
 
+### 11. Telemetry Package
+
+**Import:** `github.com/grinps/go-utils/telemetry`
+
+A vendor-agnostic API for application observability including distributed tracing and metrics collection.
+
+#### Features
+- **Provider Interface** - Entry point for creating Tracers and Meters
+- **Distributed Tracing** - Span-based tracing with context propagation
+- **Metrics Collection** - Counter, Recorder, and Observable instruments
+- **Async Instruments** - ObservableCounter and ObservableGauge with callback pattern
+- **Context Integration** - Store and retrieve providers from context
+- **Default Provider** - NoopProvider for graceful degradation
+- **Error Handling Strategy** - Configurable error handling for testing
+- **Thread Safe** - All interfaces designed for concurrent use
+
+#### Core Interfaces
+
+```go
+// Provider - Entry point for telemetry
+type Provider interface {
+    Tracer(name string, opts ...any) (Tracer, error)
+    Meter(name string, opts ...any) (Meter, error)
+    Shutdown(ctx context.Context) error
+}
+
+// Tracer - Creates spans for distributed tracing
+type Tracer interface {
+    Start(ctx context.Context, name string, opts ...any) (context.Context, Span)
+}
+
+// Span - Represents a unit of work
+type Span interface {
+    End(opts ...any)
+    IsRecording() bool
+    SetAttributes(attrs ...any)
+    AddEvent(name string, opts ...any)
+    RecordError(err error, opts ...any)
+    SetStatus(code int, description string)
+    SetName(name string)
+    TracerProvider() Provider
+}
+
+// Meter - Creates metric instruments
+type Meter interface {
+    NewInstrument(name string, opts ...any) (Instrument, error)
+}
+
+// Observable instruments with callback pattern
+type Callback[T int64 | float64] func(ctx context.Context, observer Observer[T])
+type Observer[T int64 | float64] interface {
+    Observe(value T, attrs ...any)
+}
+```
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/telemetry"
+)
+
+func main() {
+    // Get the default provider (NoopProvider)
+    provider := telemetry.Default()
+
+    // Create a tracer
+    tracer, _ := provider.Tracer("my-service")
+
+    // Start a span
+    ctx, span := tracer.Start(context.Background(), "operation")
+    defer span.End()
+
+    // Add attributes and events
+    span.SetAttributes("user.id", "12345")
+    span.AddEvent("processing-started")
+
+    // Create a meter and instrument
+    meter, _ := provider.Meter("my-service")
+    counter, _ := meter.NewInstrument("requests_total",
+        telemetry.InstrumentTypeCounter,
+        telemetry.CounterTypeMonotonic,
+    )
+    
+    // Create observable gauge with callback
+    gauge, _ := meter.NewInstrument("memory_usage",
+        telemetry.InstrumentTypeObservableGauge,
+        telemetry.WithCallback(func(ctx context.Context, obs telemetry.Observer[int64]) {
+            obs.Observe(getCurrentMemory())
+        }),
+    )
+}
+```
+
+#### Context Propagation
+
+```go
+// Store provider in context
+ctx := telemetry.ContextWithTelemetry(ctx, provider)
+
+// Retrieve provider from context (second param controls fallback)
+provider := telemetry.ContextTelemetry(ctx, true)  // falls back to Default()
+provider := telemetry.ContextTelemetry(ctx, false) // returns nil if not found
+
+// Store and retrieve tracer/meter from context
+ctx = telemetry.ContextWithTracer(ctx, tracer)
+tracer := telemetry.ContextTracer(ctx, true)       // falls back to noop
+
+ctx = telemetry.ContextWithMeter(ctx, meter)
+meter := telemetry.ContextMeter(ctx, true)         // falls back to noop
+
+// Create type-safe instrument from context's meter
+counter, err := telemetry.NewInstrument[telemetry.Counter[int64]](ctx, "requests",
+    telemetry.InstrumentTypeCounter, telemetry.CounterTypeMonotonic)
+```
+
+#### Key Functions
+- `Default()` - Returns the default provider (NoopProvider)
+- `AsDefault(provider)` - Sets a custom default provider
+- `ContextWithTelemetry(ctx, provider)` - Stores provider in context
+- `ContextTelemetry(ctx, defaultIfNotAvailable)` - Retrieves provider from context
+- `ContextWithTracer(ctx, tracer)` - Stores tracer in context
+- `ContextTracer(ctx, defaultIfNotAvailable)` - Retrieves tracer from context
+- `ContextTracerE(ctx, defaultIfNotAvailable)` - Retrieves tracer with error handling
+- `ContextWithMeter(ctx, meter)` - Stores meter in context
+- `ContextMeter(ctx, defaultIfNotAvailable)` - Retrieves meter from context
+- `ContextMeterE(ctx, defaultIfNotAvailable)` - Retrieves meter with error handling
+- `NewInstrument[T](ctx, name, opts...)` - Creates type-safe instrument from context's meter
+
+---
+
+### 12. Telemetry Memory Package
+
+**Import:** `github.com/grinps/go-utils/telemetry/memory`
+
+An in-memory implementation of the telemetry interfaces for testing and development.
+
+#### Features
+- **Full Interface Implementation** - Implements Provider, Tracer, Span, and Meter interfaces
+- **Test Assertions** - Access recorded spans and metrics for test verification
+- **Thread Safe** - All operations are safe for concurrent use
+- **Span Relationships** - Support for parent-child span relationships
+- **Generic Instruments** - Counter[T], Recorder[T], ObservableCounter[T], and ObservableGauge[T]
+- **Observable Instruments** - Async instruments with callback-based observation
+- **Key-Value Options** - Minimal dependency usage with string key-value pairs
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/telemetry"
+    "github.com/grinps/go-utils/telemetry/memory"
+)
+
+func TestMyService(t *testing.T) {
+    // Create in-memory provider
+    provider := memory.NewProvider()
+    defer provider.Shutdown(context.Background())
+
+    // Create tracer and span
+    tracer, _ := provider.Tracer("test-service")
+    ctx, span := tracer.Start(context.Background(), "operation")
+    span.SetAttributes("user.id", "12345")  // Key-value pairs
+    span.End()
+
+    // Assert on recorded spans
+    spans := provider.RecordedSpans()
+    if len(spans) != 1 {
+        t.Fatalf("expected 1 span, got %d", len(spans))
+    }
+    if !spans[0].HasAttribute("user.id") {
+        t.Error("expected user.id attribute")
+    }
+
+    // Create meter and instrument
+    meter, _ := provider.Meter("test-service")
+    inst, _ := meter.NewInstrument("requests",
+        telemetry.InstrumentTypeCounter,
+        telemetry.CounterTypeMonotonic,
+    )
+    counter := inst.(telemetry.Counter[int64])
+    counter.Add(ctx, 1, "method", "GET")  // Key-value attributes
+
+    // Assert on recorded metrics
+    m := meter.(*memory.Meter)
+    measurements := m.RecordedMeasurements()
+    if len(measurements) != 1 {
+        t.Fatalf("expected 1 measurement, got %d", len(measurements))
+    }
+}
+```
+
+#### Minimal Dependency Usage
+
+Pass options as key-value pairs to avoid importing memory package types:
+
+```go
+// Tracer/Meter with version and custom attributes
+tracer, _ := provider.Tracer("my-service", 
+    "version", "1.0.0",
+    "service.env", "production",
+)
+
+// Instrument attributes as key-value pairs
+counter.Add(ctx, 1, "user.id", "12345", "request.size", 1024)
+span.AddEvent("cache-hit", "cache.key", "user:123")
+```
+
+#### Key Types
+- `Provider` - In-memory telemetry provider with recorded data access
+- `RecordedSpan` - Captured span data with assertion helpers
+- `RecordedMeasurement` - Captured metric measurement
+- `Meter` - In-memory meter with measurement recording
+- `Counter[T]` - Generic counter instrument
+- `Recorder[T]` - Generic recorder instrument
+- `ObservableCounter[T]` - Async counter with callback registration
+- `ObservableGauge[T]` - Async gauge with callback registration
+
+---
+
+### 13. Telemetry OTEL Package
+
+**Import:** `github.com/grinps/go-utils/telemetry/otel`
+
+An OpenTelemetry-based implementation of the telemetry interfaces using `go.opentelemetry.io/contrib/otelconf` for declarative configuration.
+
+#### Features
+- **Full Provider Implementation** - Complete `telemetry.Provider` using OpenTelemetry SDK
+- **Declarative Configuration** - Uses otelconf.OpenTelemetryConfiguration schema
+- **Config Package Integration** - Load configuration via `config.Config` with YAML parsing
+- **OTLP Export** - Built-in support for OTLP gRPC and HTTP exporters
+- **Embedded Types** - Tracer and Meter embed their OpenTelemetry counterparts
+- **Observable Instruments** - Full support for async metrics with unified observer pattern
+- **Resource Configuration** - Service name, namespace, version via `attributes_list`
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/config"
+    "github.com/grinps/go-utils/config/ext"
+    "github.com/grinps/go-utils/telemetry/otel"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create config with OTLP gRPC exporter
+    cfg := ext.NewConfigWrapper(config.NewSimpleConfig(ctx, config.WithConfigurationMap(map[string]any{
+        "opentelemetry": map[string]any{
+            "file_format": "0.3",
+            "resource": map[string]any{
+                "attributes_list": "service.name=my-service,service.version=1.0.0",
+            },
+            "tracer_provider": map[string]any{
+                "processors": []any{
+                    map[string]any{
+                        "batch": map[string]any{
+                            "exporter": map[string]any{
+                                "otlp_grpc": map[string]any{
+                                    "endpoint": "localhost:4317",
+                                    "insecure": true,
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    })))
+    
+    // Create provider from config
+    provider, err := otel.NewProviderFromConfig(ctx, cfg)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer provider.Shutdown(ctx)
+    
+    // Use tracer
+    tracer, _ := provider.Tracer("my-service")
+    ctx, span := tracer.Start(ctx, "operation")
+    defer span.End()
+}
+```
+
+#### Integration Testing
+
+```bash
+# Start OpenTelemetry Collector
+docker run \
+  -p 127.0.0.1:4317:4317 \
+  -p 127.0.0.1:4318:4318 \
+  --name otel-collector \
+  otel/opentelemetry-collector:0.141.0 \
+  --config /etc/otelcol/config.yaml \
+  --config 'yaml:service::pipelines::metrics::receivers: [otlp]'
+
+# Run integration tests
+go test -tags=integration ./...
+```
+
+#### Key Functions
+- `NewProvider(ctx, opts...)` - Create with options
+- `NewProviderFromConfig(ctx, config.Config)` - Create from config (recommended)
+- `LoadConfiguration(ctx, config.Config)` - Load otelconf config using YAML + ParseYAML
+- `DefaultConfiguration()` - Get default configuration
+
+---
+
 ## Testing
 
 All packages include comprehensive test coverage:
@@ -727,6 +1040,9 @@ go test ./platform/...
 - **Platform Package**: 93.2%
 - **Config Package**: 93.3%
 - **Config Ext Package**: 96.4%
+- **Telemetry Package**: 100%
+- **Telemetry Memory Package**: 97.4%
+- **Telemetry OTEL Package**: 80.1%
 - **System Package**: Comprehensive unit tests
 - **GoSub Package**: Selection and event tests
 - **Registry Package**: Generic type tests
@@ -802,6 +1118,9 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | **config** | Configuration management | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config) |
 | **config/ext** | Config extensions (ConfigWrapper) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/ext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/ext) |
 | **config/koanf** | Koanf wrapper for Config interfaces | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/koanf.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/koanf) |
+| **telemetry** | Observability API (tracing & metrics) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry) |
+| **telemetry/memory** | In-memory telemetry for testing | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/memory.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/memory) |
+| **telemetry/otel** | OpenTelemetry implementation | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/otel.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/otel) |
 
 ---
 
@@ -820,6 +1139,9 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | `config` | Configuration | `Config`, `MutableConfig`, `MarshableConfig` |
 | `config/ext` | Config extensions |  `ConfigWrapper` |
 | `config/koanf` | Koanf wrapper | `KoanfConfig` |
+| `telemetry` | Observability | `Provider`, `Tracer`, `Meter` |
+| `telemetry/memory` | In-memory telemetry | `Provider`, `RecordedSpan`, `Meter` |
+| `telemetry/otel` | OpenTelemetry impl | `Provider`, `Tracer`, `Meter` |
 
 ---
 
@@ -987,7 +1309,75 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 
 ---
 
+### Telemetry Package
+
+#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/telemetry/v0.2.0) (December 2025)
+- ✅ **Context Tracer/Meter Functions** - `ContextWithTracer`, `ContextTracer`, `ContextTracerE` for tracer context propagation
+- ✅ **Context Meter Functions** - `ContextWithMeter`, `ContextMeter`, `ContextMeterE` for meter context propagation
+- ✅ **Generic NewInstrument** - Type-safe `NewInstrument[T]` for creating instruments with compile-time type checking
+- ✅ **ContextTelemetry Update** - Added `defaultIfNotAvailable` boolean parameter for explicit fallback control
+- 🔧 **Removed NewTracer/NewMeter** - Replaced by `ContextTracerE` and `ContextMeterE` functions
+- 🐛 **Fixed nil pointer dereference** - Fixed reflection panic in `NewInstrument` type mismatch error
+- 🔧 **Removed dead code** - Cleaned up unreachable fallback paths in context functions
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/telemetry/v0.1.0) (December 2025)
+- ✅ **Initial Release** - Vendor-agnostic observability API
+- ✅ **Provider Interface** - Entry point for creating Tracers and Meters with shutdown support
+- ✅ **Tracer Interface** - Span-based distributed tracing with context propagation
+- ✅ **Span Interface** - Full span lifecycle with attributes, events, errors, and status
+- ✅ **Meter Interface** - Instrument creation for metrics collection
+- ✅ **Instrument Types** - Counter (monotonic/up-down) and Recorder (gauge/histogram)
+- ✅ **NoopProvider** - Default no-op implementation for graceful degradation
+- ✅ **Context Integration** - Store and retrieve providers via context
+- ✅ **Error Handling Strategy** - Configurable error handling for testing scenarios
+- ✅ **Structured Errors** - Uses `errext` package for rich error information
+- ✅ **100% Test Coverage** - Comprehensive test suite
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry)
+
+---
+
+### Telemetry Memory Package
+
+#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/telemetry/memory/v0.2.0) (December 2025)
+- ✅ **Observable Instruments** - Added `ObservableCounter[T]` and `ObservableGauge[T]` with callback registration
+- ✅ **Unified Observer Pattern** - Single instrument field for memory-optimized async observation
+- ✅ **97.4% Test Coverage** - Comprehensive test suite including observable instruments
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/telemetry/memory/v0.1.0) (December 2025)
+- ✅ **Initial Release** - In-memory telemetry implementation for testing
+- ✅ **Provider Implementation** - Full `telemetry.Provider` interface with recorded data access
+- ✅ **Tracer & Span** - Complete tracing with parent-child relationships
+- ✅ **Meter & Instruments** - Generic `Counter[T]` and `Recorder[T]` implementations
+- ✅ **RecordedSpan** - Test assertion helpers (`HasAttribute`, `GetAttribute`, `HasEvent`, `Duration`)
+- ✅ **RecordedMeasurement** - Access to recorded metric values and attributes
+- ✅ **Key-Value Options** - Minimal dependency usage with string key-value pairs for options and attributes
+- ✅ **Thread Safe** - All operations safe for concurrent use
+- ✅ **NoopProvider Fallback** - Returns noop tracer/meter after shutdown
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/memory.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/memory)
+
+---
+
+### Telemetry OTEL Package
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/telemetry/otel/v0.1.0) (December 2025)
+- ✅ **Initial Release** - OpenTelemetry-based telemetry implementation
+- ✅ **Full Provider Implementation** - Complete `telemetry.Provider` using OpenTelemetry SDK
+- ✅ **Declarative Configuration** - Uses `otelconf.OpenTelemetryConfiguration` schema
+- ✅ **Config Integration** - Load config via `config.Config` with YAML + `otelconf.ParseYAML`
+- ✅ **OTLP gRPC Export** - Built-in support for OTLP gRPC exporter (`otlp_grpc`)
+- ✅ **Resource Configuration** - Service attributes via `attributes_list` format
+- ✅ **Embedded Types** - Tracer/Meter embed OpenTelemetry counterparts for direct SDK access
+- ✅ **Observable Instruments** - Full async metrics with unified observer pattern (memory-optimized)
+- ✅ **Integration Tests** - Tests with OpenTelemetry Collector (`-tags=integration`)
+- ✅ **80.1% Test Coverage** - Comprehensive test suite
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/otel.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/otel)
+
+---
+
 **Version:** 1.0.0  
-**Last Updated:** November 2025
+**Last Updated:** December 2025
 
 
