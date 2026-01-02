@@ -539,13 +539,15 @@ A flexible, context-aware configuration management library supporting nested map
 - **Marshable Configurations**: `MarshableConfig` interface for unmarshalling into structs.
 - **Simple In-Memory Implementation**: `SimpleConfig` implements all interfaces for easy testing.
 - **Structured Error Handling**: Uses `errext` package for rich error information.
-- **High Test Coverage**: >93% test coverage.
+- **Built-in Telemetry**: Integrated tracing and metrics via the `telemetry` package.
+- **High Test Coverage**: ~95% test coverage.
 
 #### Core Interfaces
 
 ```go
 // Config - Basic configuration retrieval
 type Config interface {
+    Name() ProviderName // Returns provider name (e.g., "SimpleConfig")
     GetValue(ctx context.Context, key string) (any, error)
     GetConfig(ctx context.Context, key string) (Config, error)
 }
@@ -642,10 +644,15 @@ err = config.Unmarshal(ctx, "server", &server)
 #### Key Functions
 - `NewSimpleConfig(ctx, opts...)` - Creates in-memory config
 - `GetValueE[T](ctx, key, *T)` - Type-safe retrieval from context
+- `GetValueWithConfig[T](ctx, cfg, key, *T)` - Type-safe retrieval with explicit config
 - `SetValue(ctx, key, value)` - Sets value in context config
+- `SetValueWithConfig(ctx, cfg, key, value)` - Sets value with explicit config
 - `Unmarshal[T](ctx, key, *T)` - Unmarshals into struct from context
+- `UnmarshalWithConfig[T](ctx, cfg, key, *T)` - Unmarshals with explicit config
 - `ContextWithConfig(ctx, cfg)` - Stores config in context
 - `ContextConfig(ctx, useDefault)` - Retrieves config from context
+- `SetTelemetryEnabled(bool)` - Globally toggle telemetry
+- `IsTelemetryEnabled()` - Check if telemetry is enabled
 
 ---
 
@@ -1038,7 +1045,7 @@ go test ./platform/...
 ### Test Coverage
 
 - **Platform Package**: 93.2%
-- **Config Package**: 93.3%
+- **Config Package**: ~95%
 - **Config Ext Package**: 96.4%
 - **Telemetry Package**: 100%
 - **Telemetry Memory Package**: 97.4%
@@ -1136,7 +1143,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | `logs` | Logging | `Log()`, `Warn()` |
 | `base_utils` | Core utilities | `Equality`, `Comparable` |
 | `errext` | Error handling | `ErrorCode`, `Error` |
-| `config` | Configuration | `Config`, `MutableConfig`, `MarshableConfig` |
+| `config` | Configuration | `Config`, `MutableConfig`, `MarshableConfig`, `TelemetryAware` |
 | `config/ext` | Config extensions |  `ConfigWrapper` |
 | `config/koanf` | Koanf wrapper | `KoanfConfig` |
 | `telemetry` | Observability | `Provider`, `Tracer`, `Meter` |
@@ -1262,6 +1269,22 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 ---
 
 ### Config Package
+
+#### [v0.4.0](https://github.com/grinps/go-utils/releases/tag/config/v0.4.0) (January 2026)
+- ✅ **Telemetry Integration** - Built-in tracing and metrics via the `telemetry` package
+- ✅ **ProviderName Type** - Added `ProviderName` type and `Name()` method to `Config` interface
+- ✅ **TelemetryAware Interface** - Optional interface for fine-grained telemetry control and custom attributes
+- ✅ **Global Telemetry Toggle** - `SetTelemetryEnabled(bool)` and `IsTelemetryEnabled()` functions
+- ✅ **Operation Metrics** - Automatic counters and histograms for `get_value`, `set_value`, `get_config`, `unmarshal`
+- ✅ **Error Counters** - Dedicated `config.errors.count` metric with error code attributes
+- ✅ **Span Parenting** - Proper context propagation for distributed tracing
+- ✅ **Key Prefix Attributes** - Cardinality-controlled `config.key_prefix` attribute
+- ✅ **Updated Documentation** - Comprehensive telemetry section in doc.go and README.md
+
+#### [v0.3.0](https://github.com/grinps/go-utils/releases/tag/config/v0.3.0) (November 2025)
+- ✅ **GetValueWithConfig** - Type-safe retrieval with explicit config parameter
+- ✅ **GetConfigWithConfig** - Nested config retrieval with explicit config parameter
+- ✅ **SetAsDefault** - Set custom default configuration
 
 #### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/config/v0.2.0) (November 2025)
 - ✅ **Initial Release** - Flexible, context-aware configuration management
