@@ -13,6 +13,7 @@ The `base-utils` library provides a set of well-tested, production-ready utiliti
 - **Logging** - Environment-configurable logging utilities
 - **Type Utilities** - Comparison, equality, and string handling interfaces
 - **Generic Registry** - Type-safe registry with comparable keys
+- **Extended Error Handling** - Structured error generation, categorization, and templating
 
 ## Installation
 
@@ -482,6 +483,43 @@ type StringSecure interface {
 
 ---
 
+### 8. Errext Package
+
+**Import:** `github.com/grinps/go-utils/errext`
+
+Extended error handling with error codes, types, and templating.
+
+#### Features
+- **Error Codes & Types** - Assign integer codes and string types to errors
+- **Templating** - Define error message templates with placeholders
+- **Stack Traces** - Optional stack trace capture for debugging
+- **Stdlib Compatibility** - Fully implements `error`, `errors.Is`, `errors.As`, `errors.Unwrap`
+- **Panic Recovery** - Utilities to safely handle panics
+
+#### Quick Example
+
+```go
+import "github.com/grinps/go-utils/errext"
+
+// Define a unique error code
+var ErrInvalidInput = errext.NewErrorCode(1001)
+
+func Process(val string) error {
+    if val == "" {
+        // Create error instance
+        return ErrInvalidInput.New("input cannot be empty")
+    }
+    return nil
+}
+
+// Enable stack traces (optional)
+func init() {
+    errext.EnableStackTrace = true
+}
+```
+
+---
+
 ## Testing
 
 All packages include comprehensive test coverage:
@@ -775,6 +813,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | **ioutils** | I/O utilities and resolvers | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/base-utils/ioutils.svg)](https://pkg.go.dev/github.com/grinps/go-utils/base-utils/ioutils) |
 | **logs** | Logging utilities | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/base-utils/logs.svg)](https://pkg.go.dev/github.com/grinps/go-utils/base-utils/logs) |
 | **base-utils** | Core utilities | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/base-utils.svg)](https://pkg.go.dev/github.com/grinps/go-utils/base-utils) |
+| **errext** | Extended error handling | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/errext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/errext) |
 
 ---
 
@@ -789,6 +828,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | `ioutils` | I/O utilities | `Source` |
 | `logs` | Logging | `Log()`, `Warn()` |
 | `base_utils` | Core utilities | `Equality`, `Comparable` |
+| `errext` | Error handling | `ErrorCode`, `Error` |
 
 ---
 
@@ -895,6 +935,20 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 
 ---
 
+### Errext Package
+
+#### Current (November 2025)
+- ✅ **Initial Release** - Structured error handling
+- ✅ **Error Codes & Types** - Integer codes and string categorization
+- ✅ **Templating** - Message templates with parameters
+- ✅ **Stack Traces** - Optional stack capture
+- ✅ **Stdlib Compatibility** - `errors.Is` and `errors.As` support
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/errext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/errext)
+
+---
+
 **Version:** 1.0.0  
 **Last Updated:** November 2025
+
 
