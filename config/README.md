@@ -168,6 +168,48 @@ func GetConfig(ctx context.Context, key string) (Config, error)
 func GetConfigWithConfig(ctx context.Context, cfg Config, key string) (Config, error)
 ```
 
+### Optional Interfaces
+
+The package defines optional interfaces that Config implementations may support:
+
+```go
+// AllGetter returns all configuration as a map
+type AllGetter interface {
+    All(ctx context.Context) map[string]any
+}
+
+// AllKeysProvider lists all configuration keys
+type AllKeysProvider interface {
+    Keys(prefix string) []string
+}
+
+// Deleter supports key deletion
+type Deleter interface {
+    Delete(key string) error
+}
+```
+
+SimpleConfig implements all optional interfaces:
+
+```go
+// Get all configuration
+if allGetter, ok := cfg.(config.AllGetter); ok {
+    all := allGetter.All(ctx)
+    fmt.Printf("Config: %v\n", all)
+}
+
+// List all keys
+if keysProvider, ok := cfg.(config.AllKeysProvider); ok {
+    keys := keysProvider.Keys("")           // All keys
+    serverKeys := keysProvider.Keys("server") // Keys with prefix
+}
+
+// Delete a key
+if deleter, ok := cfg.(config.Deleter); ok {
+    err := deleter.Delete("server.debug")
+}
+```
+
 ## Error Handling
 
 The package uses the `errext` package for structured error handling:

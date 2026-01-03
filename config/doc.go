@@ -215,4 +215,37 @@
 //
 // The ProviderName type is a string alias that identifies the config implementation
 // (e.g., "SimpleConfig", "KoanfConfig").
+//
+// # Optional Interfaces
+//
+// The package defines several optional interfaces that Config implementations may support:
+//
+//	// AllGetter returns all configuration as a map
+//	type AllGetter interface {
+//	    All(ctx context.Context) map[string]any
+//	}
+//
+//	// AllKeysProvider lists all configuration keys
+//	type AllKeysProvider interface {
+//	    Keys(prefix string) []string
+//	}
+//
+//	// Deleter supports key deletion
+//	type Deleter interface {
+//	    Delete(key string) error
+//	}
+//
+// SimpleConfig implements all optional interfaces. Use type assertions to check support:
+//
+//	if allGetter, ok := cfg.(config.AllGetter); ok {
+//	    all := allGetter.All(ctx)
+//	}
+//
+//	if keysProvider, ok := cfg.(config.AllKeysProvider); ok {
+//	    keys := keysProvider.Keys("server")
+//	}
+//
+//	if deleter, ok := cfg.(config.Deleter); ok {
+//	    err := deleter.Delete("server.debug")
+//	}
 package config

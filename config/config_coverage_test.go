@@ -865,3 +865,226 @@ func TestContextConfigNilContext(t *testing.T) {
 		t.Error("Expected nil config when context is nil and defaultIfNotAvailable=false")
 	}
 }
+
+func TestSimpleConfig_All(t *testing.T) {
+	ctx := context.Background()
+	data := map[string]any{
+		"server": map[string]any{
+			"port": 8080,
+			"host": "localhost",
+		},
+		"app": map[string]any{
+			"name": "test-app",
+		},
+	}
+	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+
+	// Test All() returns the configuration map
+	allGetter, ok := cfg.(config.AllGetter)
+	if !ok {
+		t.Fatal("SimpleConfig should implement AllGetter")
+	}
+
+	all := allGetter.All(ctx)
+	if all == nil {
+		t.Error("Expected non-nil map from All()")
+	}
+
+	// Verify the data is correct
+	server, ok := all["server"].(map[string]any)
+	if !ok {
+		t.Error("Expected server to be a map")
+	}
+	if server["port"] != 8080 {
+		t.Errorf("Expected port 8080, got %v", server["port"])
+	}
+
+	// Test All() with nil config
+	var nilCfg config.SimpleConfig
+	nilAll := nilCfg.All(ctx)
+	if nilAll != nil {
+		t.Error("Expected nil from All() on nil config")
+	}
+}
+
+func TestSimpleConfig_Keys(t *testing.T) {
+	ctx := context.Background()
+	data := map[string]any{
+		"server": map[string]any{
+			"port": 8080,
+			"host": "localhost",
+		},
+		"app": map[string]any{
+			"name":    "test-app",
+			"version": "1.0.0",
+		},
+		"debug": true,
+	}
+	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+
+	// Test Keys() returns all keys
+	keysProvider, ok := cfg.(config.AllKeysProvider)
+	if !ok {
+		t.Fatal("SimpleConfig should implement AllKeysProvider")
+	}
+
+	allKeys := keysProvider.Keys("")
+	if allKeys == nil {
+		t.Error("Expected non-nil keys from Keys()")
+	}
+
+	// Should have keys for: server, server.port, server.host, app, app.name, app.version, debug
+	expectedMinKeys := 7
+	if len(allKeys) < expectedMinKeys {
+		t.Errorf("Expected at least %d keys, got %d: %v", expectedMinKeys, len(allKeys), allKeys)
+	}
+
+	// Test Keys() with prefix
+	serverKeys := keysProvider.Keys("server")
+	if serverKeys == nil {
+		t.Error("Expected non-nil keys from Keys('server')")
+	}
+
+	// Should have: server, server.port, server.host
+	hasServerPort := false
+	hasServerHost := false
+	for _, k := range serverKeys {
+		if k == "server.port" {
+			hasServerPort = true
+		}
+		if k == "server.host" {
+			hasServerHost = true
+		}
+	}
+	if !hasServerPort || !hasServerHost {
+		t.Errorf("Expected server.port and server.host in keys, got %v", serverKeys)
+	}
+
+	// Test Keys() with nil config
+	var nilCfg config.SimpleConfig
+	nilKeys := nilCfg.Keys("")
+	if nilKeys != nil {
+		t.Error("Expected nil from Keys() on nil config")
+	}
+}
+
+func TestSimpleConfig_Delete(t *testing.T) {
+	ctx := context.Background()
+	data := map[string]any{
+		"server": map[string]any{
+			"port":  8080,
+			"host":  "localhost",
+			"debug": true,
+		},
+		"app": map[string]any{
+			"name": "test-app",
+		},
+	}
+	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+
+	// Test Delete() interface
+	deleter, ok := cfg.(config.Deleter)
+	if !ok {
+		t.Fatal("SimpleConfig should implement Deleter")
+	}
+
+	// Delete a nested key
+	err := deleter.Delete("server.debug")
+	if err != nil {
+		t.Errorf("Delete failed: %v", err)
+	}
+
+	// Verify key is deleted
+	_, err = cfg.GetValue(ctx, "server.debug")
+	if err == nil {
+		t.Error("Expected error when getting deleted key")
+	}
+
+	// Verify other keys still exist
+	val, err := cfg.GetValue(ctx, "server.port")
+	if err != nil {
+		t.Errorf("GetValue failed: %v", err)
+	}
+	if val.(int) != 8080 {
+		t.Errorf("Expected 8080, got %v", val)
+	}
+
+	// Delete a top-level key
+	err = deleter.Delete("app")
+	if err != nil {
+		t.Errorf("Delete top-level key failed: %v", err)
+	}
+
+	// Verify key is deleted
+	_, err = cfg.GetValue(ctx, "app.name")
+	if err == nil {
+		t.Error("Expected error when getting deleted key")
+	}
+
+	// Test Delete() with empty key
+	err = deleter.Delete("")
+	if err == nil {
+		t.Error("Expected error for empty key")
+	}
+
+	// Test Delete() with missing key
+	err = deleter.Delete("nonexistent.key")
+	if err == nil {
+		t.Error("Expected error for missing key")
+	}
+
+	// Test Delete() with nil config
+	var nilCfg config.SimpleConfig
+	err = nilCfg.Delete("key")
+	if err == nil {
+		t.Error("Expected error for nil config")
+	}
+}
+
+func TestSimpleConfig_Delete_NestedMissing(t *testing.T) {
+	ctx := context.Background()
+	data := map[string]any{
+		"server": map[string]any{
+			"port": 8080,
+		},
+	}
+	cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+
+	deleter := cfg.(config.Deleter)
+
+	// Test Delete() with missing intermediate key
+	err := deleter.Delete("missing.nested.key")
+	if err == nil {
+		t.Error("Expected error for missing intermediate key")
+	}
+
+	// Test Delete() with non-map intermediate value
+	cfg2 := config.NewSimpleConfig(ctx, config.WithConfigurationMap(map[string]any{
+		"scalar": "value",
+	}))
+	deleter2 := cfg2.(config.Deleter)
+
+	err = deleter2.Delete("scalar.nested")
+	if err == nil {
+		t.Error("Expected error for non-map intermediate value")
+	}
+}
+
+func TestSimpleConfig_InterfaceCompileCheck(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.NewSimpleConfig(ctx)
+
+	// Runtime interface checks (NewSimpleConfig returns config.Config interface)
+	if _, ok := cfg.(config.MutableConfig); !ok {
+		t.Error("SimpleConfig should implement MutableConfig")
+	}
+	if _, ok := cfg.(config.AllGetter); !ok {
+		t.Error("SimpleConfig should implement AllGetter")
+	}
+	if _, ok := cfg.(config.AllKeysProvider); !ok {
+		t.Error("SimpleConfig should implement AllKeysProvider")
+	}
+	if _, ok := cfg.(config.Deleter); !ok {
+		t.Error("SimpleConfig should implement Deleter")
+	}
+}

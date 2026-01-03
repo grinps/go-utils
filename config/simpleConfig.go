@@ -179,6 +179,114 @@ func (cfg *simpleConfig) SetValue(ctx context.Context, key string, value any) er
 	return nil
 }
 
+// All returns all configuration as a map.
+// Implements config.AllGetter interface.
+//
+// Example:
+//
+//	all := cfg.All(ctx)
+//	for key, value := range all {
+//	    fmt.Printf("%s: %v\n", key, value)
+//	}
+func (cfg *simpleConfig) All(ctx context.Context) map[string]any {
+	if cfg == nil || cfg.configurationMap == nil {
+		return map[string]any{}
+	}
+	return cfg.configurationMap
+}
+
+// Keys returns all keys in the configuration with the given prefix.
+// If prefix is empty, all keys are returned.
+// Implements config.AllKeysProvider interface.
+//
+// Example:
+//
+//	allKeys := cfg.Keys("")           // Get all keys
+//	serverKeys := cfg.Keys("server")  // Get keys starting with "server"
+func (cfg *simpleConfig) Keys(prefix string) []string {
+	if cfg == nil || cfg.configurationMap == nil {
+		return []string{}
+	}
+
+	keys := cfg.collectKeys(cfg.configurationMap, "")
+
+	if prefix == "" {
+		return keys
+	}
+
+	// Filter keys by prefix
+	var filtered []string
+	prefixWithDot := prefix + cfg.delimiter
+	for _, key := range keys {
+		if key == prefix || strings.HasPrefix(key, prefixWithDot) {
+			filtered = append(filtered, key)
+		}
+	}
+	return filtered
+}
+
+// collectKeys recursively collects all keys from a nested map.
+func (cfg *simpleConfig) collectKeys(m map[string]any, prefix string) []string {
+	var keys []string
+	for k, v := range m {
+		fullKey := k
+		if prefix != "" {
+			fullKey = prefix + cfg.delimiter + k
+		}
+
+		keys = append(keys, fullKey)
+
+		// Recurse into nested maps
+		if nested, ok := v.(map[string]any); ok {
+			keys = append(keys, cfg.collectKeys(nested, fullKey)...)
+		}
+	}
+	return keys
+}
+
+// Delete deletes a key from the configuration.
+// Returns an error if the key is empty or not found.
+// Implements config.Deleter interface.
+//
+// Example:
+//
+//	err := cfg.Delete("server.debug")
+func (cfg *simpleConfig) Delete(key string) error {
+	if cfg == nil || cfg.configurationMap == nil {
+		return ErrConfigNilConfig.New("nil config or map", "key", key)
+	}
+
+	if key == "" {
+		return ErrConfigEmptyKey.New("empty key", "key", key)
+	}
+
+	keyParts := strings.Split(key, cfg.delimiter)
+	currentMap := cfg.configurationMap
+
+	// Navigate to the parent map
+	for i := 0; i < len(keyParts)-1; i++ {
+		part := keyParts[i]
+		val, found := currentMap[part]
+		if !found {
+			return ErrConfigMissingValue.New("key not found", "key", key)
+		}
+		if m, ok := val.(map[string]any); ok {
+			currentMap = m
+		} else {
+			return ErrConfigMissingValue.New("key not found", "key", key)
+		}
+	}
+
+	// Delete the final key
+	finalKey := keyParts[len(keyParts)-1]
+	if _, found := currentMap[finalKey]; !found {
+		return ErrConfigMissingValue.New("key not found", "key", key)
+	}
+
+	delete(currentMap, finalKey)
+	return nil
+}
+
 // SimpleConfigOption is a function that configures a simpleConfig instance.
 type SimpleConfigOption func(cfg *simpleConfig)
 
