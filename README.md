@@ -2,6 +2,36 @@
 
 A comprehensive collection of Go utility packages providing foundational building blocks for Go applications.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Installation](#installation)
+- [Modules](#modules)
+    - [1. Platform Package](#1-platform-package)
+    - [2. System Package](#2-system-package)
+    - [3. GoSub Package](#3-gosub-package)
+    - [4. Registry Package](#4-registry-package)
+    - [5. IOUtils Package](#5-ioutils-package)
+    - [6. Logs Package](#6-logs-package)
+    - [7. Base Utils Package](#7-base-utils-package)
+    - [8. ErrExt Package](#8-errext-package)
+    - [9. Config Package](#9-config-package)
+    - [10. Config Ext Package](#10-config-ext-package)
+    - [11. Config Koanf Package](#11-config-koanf-package)
+    - [12. Telemetry Package](#12-telemetry-package)
+    - [13. Telemetry Memory Package](#13-telemetry-memory-package)
+    - [14. Telemetry OTEL Package](#14-telemetry-otel-package)
+    - [15. Logger Package](#15-logger-package)
+- [Testing](#testing)
+- [Design Principles](#design-principles)
+- [Contributing](#contributing)
+- [Requirements](#requirements)
+- [License](#license)
+- [Support](#support)
+- [Module Documentation](#module-documentation)
+- [Quick Reference](#quick-reference)
+- [Changelog](#changelog)
+
 ## Overview
 
 The `base-utils` library provides a set of well-tested, production-ready utilities for common Go programming patterns including:
@@ -664,6 +694,7 @@ Extended configuration utilities that build upon the base `config` package.
 
 #### Features
 - **ConfigWrapper**: Wraps any `config.Config` to provide `MarshableConfig` and `MutableConfig` capabilities with mapstructure fallback.
+- **Telemetry Support**: Implements `config.TelemetryAware` for telemetry integration.
 - **Mapstructure Fallback**: Automatic fallback to mapstructure for configs that don't natively support unmarshalling.
 - **Flexible Options**: Customizable unmarshalling via functional options (tag names, strict mode, decode hooks).
 - **Type Conversions**: Automatic string-to-duration, string-to-slice, and weak type conversions.
@@ -708,14 +739,77 @@ func main() {
 
 #### Key Functions
 - `NewConfigWrapper(cfg)` - Wraps config with mapstructure fallback
+- `wrapper.Name()` - Returns "ConfigWrapper" provider name
 - `wrapper.Unmarshal(ctx, key, target, opts...)` - Unmarshals config into struct
 - `wrapper.SetValue(ctx, key, value)` - Sets value if config is mutable
 - `wrapper.IsMutable()` - Checks if config supports mutation
 - `wrapper.IsMarshable()` - Checks if config has native unmarshal support
+- `wrapper.ShouldInstrument(ctx, key, op)` - Returns true (telemetry enabled)
+- `wrapper.GenerateTelemetryAttributes(ctx, op, attrs)` - Returns attrs as-is
 
 ---
 
-### 11. Telemetry Package
+### 11. Config Koanf Package
+
+**Import:** `github.com/grinps/go-utils/config/koanf`
+
+A wrapper around [knadh/koanf](https://github.com/knadh/koanf) that implements the `config.Config`, `config.MutableConfig`, and `config.MarshableConfig` interfaces.
+
+#### Features
+- **Standard Interface Implementation**: Implements `config.Config`, `config.MutableConfig`, and `config.MarshableConfig`.
+- **Telemetry Support**: Implements `config.TelemetryAware` for telemetry integration.
+- **Multiple Configuration Sources**: Files, environment variables, command-line flags, S3, Consul, Vault, and more.
+- **Nested Configuration**: Access nested values using dot-notation keys (customizable delimiter).
+- **Type-Safe Unmarshalling**: Unmarshal to structs with support for multiple tag formats (koanf, json, yaml, mapstructure).
+- **Provider-Based Loading**: Load from various sources using koanf's provider system.
+- **Configuration Merging**: Merge multiple configurations with override support.
+- **High Test Coverage**: >94% test coverage.
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/config/koanf"
+    "github.com/knadh/koanf/parsers/json"
+    "github.com/knadh/koanf/providers/file"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create config and load from JSON file
+    cfg, _ := koanf.NewKoanfConfig(ctx,
+        koanf.WithProvider(file.Provider("config.json"), json.Parser()),
+    )
+    
+    // Get values
+    port, _ := cfg.GetValue(ctx, "server.port")
+    
+    // Unmarshal to struct
+    type ServerConfig struct {
+        Host string `koanf:"host"`
+        Port int    `koanf:"port"`
+    }
+    var server ServerConfig
+    cfg.(*koanf.KoanfConfig).Unmarshal(ctx, "server", &server)
+}
+```
+
+#### Key Functions
+- `NewKoanfConfig(ctx, opts...)` - Creates new koanf config
+- `FromKoanf(k, opts...)` - Wraps existing koanf instance
+- `cfg.Name()` - Returns "KoanfConfig" provider name
+- `cfg.Load(ctx, provider, parser)` - Loads from provider
+- `cfg.Merge(ctx, other)` - Merges another config
+- `cfg.All(ctx)` - Returns all config as map
+- `cfg.Keys(prefix)` - Returns keys with prefix
+- `cfg.Delete(key)` - Deletes a key
+- `cfg.ShouldInstrument(ctx, key, op)` - Returns true (telemetry enabled)
+
+---
+
+### 12. Telemetry Package
 
 **Import:** `github.com/grinps/go-utils/telemetry`
 
@@ -847,7 +941,7 @@ counter, err := telemetry.NewInstrument[telemetry.Counter[int64]](ctx, "requests
 
 ---
 
-### 12. Telemetry Memory Package
+### 13. Telemetry Memory Package
 
 **Import:** `github.com/grinps/go-utils/telemetry/memory`
 
@@ -937,7 +1031,7 @@ span.AddEvent("cache-hit", "cache.key", "user:123")
 
 ---
 
-### 13. Telemetry OTEL Package
+### 14. Telemetry OTEL Package
 
 **Import:** `github.com/grinps/go-utils/telemetry/otel`
 
@@ -1046,7 +1140,8 @@ go test ./platform/...
 
 - **Platform Package**: 93.2%
 - **Config Package**: ~95%
-- **Config Ext Package**: 96.4%
+- **Config Ext Package**: >96%
+- **Config Koanf Package**: >94%
 - **Telemetry Package**: 100%
 - **Telemetry Memory Package**: 97.4%
 - **Telemetry OTEL Package**: 80.1%
@@ -1144,8 +1239,8 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | `base_utils` | Core utilities | `Equality`, `Comparable` |
 | `errext` | Error handling | `ErrorCode`, `Error` |
 | `config` | Configuration | `Config`, `MutableConfig`, `MarshableConfig`, `TelemetryAware` |
-| `config/ext` | Config extensions |  `ConfigWrapper` |
-| `config/koanf` | Koanf wrapper | `KoanfConfig` |
+| `config/ext` | Config extensions | `ConfigWrapper`, `TelemetryAware` |
+| `config/koanf` | Koanf wrapper | `KoanfConfig`, `TelemetryAware` |
 | `telemetry` | Observability | `Provider`, `Tracer`, `Meter` |
 | `telemetry/memory` | In-memory telemetry | `Provider`, `RecordedSpan`, `Meter` |
 | `telemetry/otel` | OpenTelemetry impl | `Provider`, `Tracer`, `Meter` |
@@ -1303,6 +1398,13 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 
 ### Config Ext Package
 
+#### [v0.3.0](https://github.com/grinps/go-utils/releases/tag/config/ext/v0.3.0) (January 2026)
+- ✅ **TelemetryAware Implementation** - Implements `config.TelemetryAware` interface
+- ✅ **Name() Method** - Returns "ConfigWrapper" for telemetry identification
+- ✅ **ShouldInstrument()** - Always returns true (telemetry enabled)
+- ✅ **GenerateTelemetryAttributes()** - Returns attributes as-is for telemetry
+- ✅ **Updated to config v0.4.0** - Dependency updated to latest config package
+
 #### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/config/ext/v0.2.0) (November 2025)
 - ✅ **ConfigWrapper** - Wraps any `config.Config` with `MarshableConfig` and `MutableConfig` capabilities
 - ✅ **Flexible Unmarshal Options** - Tag names (`json`, `yaml`, `mapstructure`), strict mode, decode hooks
@@ -1316,6 +1418,13 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 
 ### Config Koanf Package
 
+#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/config/koanf/v0.2.0) (January 2026)
+- ✅ **TelemetryAware Implementation** - Implements `config.TelemetryAware` interface
+- ✅ **Name() Method** - Returns "KoanfConfig" for telemetry identification
+- ✅ **ShouldInstrument()** - Always returns true (telemetry enabled)
+- ✅ **GenerateTelemetryAttributes()** - Returns attributes as-is for telemetry
+- ✅ **Updated to config v0.4.0** - Dependency updated to latest config package
+
 #### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/config/koanf/v0.1.0) (November 2025)
 - ✅ **Initial Release** - Koanf wrapper implementing Config, MutableConfig, and MarshableConfig interfaces
 - ✅ **Multiple Configuration Sources** - Support for files, env vars, command-line flags, S3, Consul, Vault, and more via koanf providers
@@ -1325,7 +1434,7 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 - ✅ **Flat Path Support** - Support for flat path unmarshalling (e.g., `server.port` as single tag)
 - ✅ **Custom Delimiters** - Configurable key delimiter (default: ".")
 - ✅ **Structured Error Handling** - Uses `errext` package for rich error information
-- ✅ **High Test Coverage** - >96% test coverage with comprehensive test suite
+- ✅ **High Test Coverage** - >94% test coverage with comprehensive test suite
 - ✅ **Complete Documentation** - Full API documentation, examples, and usage patterns
 
 **Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/koanf.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/koanf)
@@ -1401,6 +1510,6 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 ---
 
 **Version:** 1.0.0  
-**Last Updated:** December 2025
+**Last Updated:** January 2026
 
 
