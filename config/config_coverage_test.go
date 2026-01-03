@@ -902,8 +902,11 @@ func TestSimpleConfig_All(t *testing.T) {
 	// Test All() with nil config
 	var nilCfg config.SimpleConfig
 	nilAll := nilCfg.All(ctx)
-	if nilAll != nil {
-		t.Error("Expected nil from All() on nil config")
+	if nilAll == nil {
+		t.Error("Expected non-nil map from All() on nil config")
+	}
+	if len(nilAll) != 0 {
+		t.Error("Expected empty map from All() on nil config")
 	}
 }
 
@@ -963,8 +966,11 @@ func TestSimpleConfig_Keys(t *testing.T) {
 	// Test Keys() with nil config
 	var nilCfg config.SimpleConfig
 	nilKeys := nilCfg.Keys("")
-	if nilKeys != nil {
-		t.Error("Expected nil from Keys() on nil config")
+	if nilKeys == nil {
+		t.Error("Expected non-nil keys from Keys() on nil config")
+	}
+	if len(nilKeys) != 0 {
+		t.Error("Expected empty keys from Keys() on nil config")
 	}
 }
 
