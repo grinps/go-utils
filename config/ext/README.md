@@ -114,7 +114,7 @@ type MarshableConfig interface {
 
 ### ConfigWrapper
 
-Wraps any `config.Config` and implements both interfaces:
+Wraps any `config.Config` and implements all standard interfaces with passthrough support:
 
 ```go
 type ConfigWrapper struct {
@@ -126,21 +126,55 @@ func (w *ConfigWrapper) Name() config.ProviderName
 func (w *ConfigWrapper) GetValue(ctx, key) (any, error)
 func (w *ConfigWrapper) GetConfig(ctx, key) (config.Config, error)
 
-// Implements MarshableConfig (uses mapstructure fallback if needed)
+// Implements config.MarshableConfig (uses mapstructure fallback if needed)
 func (w *ConfigWrapper) Unmarshal(ctx, key, target, options...) error
 
-// Implements MutableConfig (returns error if wrapped config doesn't support it)
+// Implements config.MutableConfig (returns error if wrapped config doesn't support it)
 func (w *ConfigWrapper) SetValue(ctx, key, newValue) error
+
+// Implements config.AllGetter (passthrough if supported)
+func (w *ConfigWrapper) All(ctx) map[string]any
+
+// Implements config.AllKeysProvider (passthrough if supported)
+func (w *ConfigWrapper) Keys(prefix string) []string
+
+// Implements config.Deleter (passthrough if supported)
+func (w *ConfigWrapper) Delete(key string) error
 
 // Utility methods
 func (w *ConfigWrapper) Unwrap() config.Config
 func (w *ConfigWrapper) IsMutable() bool
 func (w *ConfigWrapper) IsMarshable() bool
-func (w *ConfigWrapper) All(ctx) map[string]any
+func (w *ConfigWrapper) HasAllGetter() bool
+func (w *ConfigWrapper) HasAllKeys() bool
+func (w *ConfigWrapper) HasDeleter() bool
 
 // Implements config.TelemetryAware
 func (w *ConfigWrapper) ShouldInstrument(ctx, key, op) bool
 func (w *ConfigWrapper) GenerateTelemetryAttributes(ctx, op, attrs) []any
+```
+
+### Passthrough Behavior
+
+ConfigWrapper automatically detects and passes through calls to optional interfaces:
+
+```go
+wrapper := ext.NewConfigWrapper(cfg)
+
+// Keys() passes through if wrapped config implements AllKeysProvider
+if wrapper.HasAllKeys() {
+    keys := wrapper.Keys("server")
+}
+
+// Delete() passes through if wrapped config implements Deleter
+if wrapper.HasDeleter() {
+    err := wrapper.Delete("server.debug")
+}
+
+// All() passes through if wrapped config implements AllGetter
+if wrapper.HasAllGetter() {
+    all := wrapper.All(ctx)
+}
 ```
 
 ## Options Reference

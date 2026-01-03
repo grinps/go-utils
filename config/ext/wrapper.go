@@ -29,6 +29,9 @@ type ConfigWrapper struct {
 	// Cached interface checks
 	marshable config.MarshableConfig
 	mutable   config.MutableConfig
+	allGetter config.AllGetter
+	allKeys   config.AllKeysProvider
+	deleter   config.Deleter
 }
 
 // Ensure ConfigWrapper implements all required interfaces
@@ -36,6 +39,9 @@ var (
 	_ config.Config          = (*ConfigWrapper)(nil)
 	_ config.MarshableConfig = (*ConfigWrapper)(nil)
 	_ config.MutableConfig   = (*ConfigWrapper)(nil)
+	_ config.AllGetter       = (*ConfigWrapper)(nil)
+	_ config.AllKeysProvider = (*ConfigWrapper)(nil)
+	_ config.Deleter         = (*ConfigWrapper)(nil)
 )
 
 // Name returns the provider name for ConfigWrapper.
@@ -80,6 +86,15 @@ func NewConfigWrapper(cfg config.Config) *ConfigWrapper {
 	}
 	if mc, ok := cfg.(config.MutableConfig); ok {
 		wrapper.mutable = mc
+	}
+	if ag, ok := cfg.(config.AllGetter); ok {
+		wrapper.allGetter = ag
+	}
+	if ak, ok := cfg.(config.AllKeysProvider); ok {
+		wrapper.allKeys = ak
+	}
+	if d, ok := cfg.(config.Deleter); ok {
+		wrapper.deleter = d
 	}
 
 	return wrapper
@@ -208,18 +223,66 @@ func (w *ConfigWrapper) IsMarshable() bool {
 
 // All returns all configuration as a map if the wrapped config supports it.
 // Returns nil if not supported.
+// Implements config.AllGetter interface.
 func (w *ConfigWrapper) All(ctx context.Context) map[string]any {
 	if w == nil || w.wrapped == nil {
-		return nil
+		return map[string]any{}
 	}
 
-	if allGetter, ok := w.wrapped.(interface {
-		All(context.Context) map[string]any
-	}); ok {
-		return allGetter.All(ctx)
+	if w.allGetter != nil {
+		return w.allGetter.All(ctx)
 	}
 
-	return nil
+	return map[string]any{}
+}
+
+// Keys returns all keys in the configuration with the given prefix.
+// If the wrapped config doesn't support AllKeysProvider, returns nil.
+// Implements config.AllKeysProvider interface.
+func (w *ConfigWrapper) Keys(prefix string) []string {
+	if w == nil || w.wrapped == nil {
+		return []string{}
+	}
+
+	if w.allKeys != nil {
+		return w.allKeys.Keys(prefix)
+	}
+
+	return []string{}
+}
+
+// Delete deletes a key from the configuration.
+// If the wrapped config doesn't support Deleter, returns ErrExtDeleteNotSupported.
+// Implements config.Deleter interface.
+func (w *ConfigWrapper) Delete(key string) error {
+	if w == nil || w.wrapped == nil {
+		return ErrExtNilConfig.New("wrapper or wrapped config is nil", "key", key)
+	}
+
+	if w.deleter != nil {
+		return w.deleter.Delete(key)
+	}
+
+	return ErrExtDeleteNotSupported.New(
+		"wrapped config does not implement Deleter",
+		"key", key,
+		"config_type", reflect.TypeOf(w.wrapped).String(),
+	)
+}
+
+// HasAllGetter returns true if the wrapped config supports All().
+func (w *ConfigWrapper) HasAllGetter() bool {
+	return w != nil && w.allGetter != nil
+}
+
+// HasAllKeys returns true if the wrapped config supports Keys().
+func (w *ConfigWrapper) HasAllKeys() bool {
+	return w != nil && w.allKeys != nil
+}
+
+// HasDeleter returns true if the wrapped config supports Delete().
+func (w *ConfigWrapper) HasDeleter() bool {
+	return w != nil && w.deleter != nil
 }
 
 // unmarshalAny is a non-generic version of unmarshalWithMapstructure
@@ -233,9 +296,7 @@ func unmarshalAny(ctx context.Context, cfg config.Config, key string, target any
 		rawConfig, err := cfg.GetValue(ctx, "")
 		if err != nil {
 			// Try alternative: the config itself might expose All()
-			if allGetter, ok := cfg.(interface {
-				All(context.Context) map[string]any
-			}); ok {
+			if allGetter, ok := cfg.(config.AllGetter); ok {
 				configMap = allGetter.All(ctx)
 			} else {
 				return ErrExtKeyNotFound.New("cannot get root config", "key", key, "error", err)
@@ -255,9 +316,7 @@ func unmarshalAny(ctx context.Context, cfg config.Config, key string, target any
 		}
 
 		// Try to get the underlying map from the sub-config
-		if allGetter, ok := subCfg.(interface {
-			All(context.Context) map[string]any
-		}); ok {
+		if allGetter, ok := subCfg.(config.AllGetter); ok {
 			configMap = allGetter.All(ctx)
 		} else {
 			// Try to retrieve as a map value

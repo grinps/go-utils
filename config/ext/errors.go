@@ -24,4 +24,7 @@ var (
 
 	// ErrExtSetValueFailed indicates setting a value failed.
 	ErrExtSetValueFailed = errext.NewErrorCodeOfType(104, ErrorTypeExt)
+
+	// ErrExtDeleteNotSupported indicates the wrapped config doesn't support delete.
+	ErrExtDeleteNotSupported = errext.NewErrorCodeOfType(105, ErrorTypeExt)
 )

@@ -496,8 +496,11 @@ func TestConfigWrapper_All(t *testing.T) {
 	t.Run("nil wrapper", func(t *testing.T) {
 		var nilWrapper *ext.ConfigWrapper
 		all := nilWrapper.All(ctx)
-		if all != nil {
-			t.Error("Expected nil for nil wrapper")
+		if all == nil {
+			t.Error("Expected non-nil map for nil wrapper")
+		}
+		if len(all) != 0 {
+			t.Error("Expected empty map for nil wrapper")
 		}
 	})
 }
@@ -817,5 +820,400 @@ func TestConfigWrapper_GenerateTelemetryAttributes(t *testing.T) {
 		if result[i] != v {
 			t.Errorf("Expected attr[%d] = %v, got %v", i, v, result[i])
 		}
+	}
+}
+
+func TestConfigWrapper_Keys(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("with config that supports Keys", func(t *testing.T) {
+		data := map[string]any{
+			"server": map[string]any{
+				"port": 8080,
+				"host": "localhost",
+			},
+			"app": map[string]any{
+				"name": "test",
+			},
+		}
+		cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+		wrapper := ext.NewConfigWrapper(cfg)
+
+		// Get all keys
+		keys := wrapper.Keys("")
+		if keys == nil {
+			t.Error("Expected non-nil keys")
+		}
+		if len(keys) < 4 {
+			t.Errorf("Expected at least 4 keys, got %d", len(keys))
+		}
+
+		// Get keys with prefix
+		serverKeys := wrapper.Keys("server")
+		if serverKeys == nil {
+			t.Error("Expected non-nil server keys")
+		}
+	})
+
+	t.Run("with config that doesn't support Keys", func(t *testing.T) {
+		mockCfg := newMockReadOnlyConfig(map[string]any{"key": "value"})
+		wrapper := ext.NewConfigWrapper(mockCfg)
+
+		keys := wrapper.Keys("")
+		if keys == nil {
+			t.Error("Expected non-nil keys for config without AllKeysProvider")
+		}
+		if len(keys) != 0 {
+			t.Error("Expected empty keys for config without AllKeysProvider")
+		}
+	})
+
+	t.Run("nil wrapper", func(t *testing.T) {
+		var wrapper *ext.ConfigWrapper
+		keys := wrapper.Keys("")
+		if keys == nil {
+			t.Error("Expected non-nil keys for nil wrapper")
+		}
+		if len(keys) != 0 {
+			t.Error("Expected empty keys for nil wrapper")
+		}
+	})
+}
+
+func TestConfigWrapper_Delete(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("with config that supports Delete", func(t *testing.T) {
+		data := map[string]any{
+			"server": map[string]any{
+				"port":  8080,
+				"debug": true,
+			},
+		}
+		cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+		wrapper := ext.NewConfigWrapper(cfg)
+
+		// Delete a key
+		err := wrapper.Delete("server.debug")
+		if err != nil {
+			t.Errorf("Delete failed: %v", err)
+		}
+
+		// Verify key is deleted
+		_, err = wrapper.GetValue(ctx, "server.debug")
+		if err == nil {
+			t.Error("Expected error when getting deleted key")
+		}
+	})
+
+	t.Run("with config that doesn't support Delete", func(t *testing.T) {
+		mockCfg := newMockReadOnlyConfig(map[string]any{"key": "value"})
+		wrapper := ext.NewConfigWrapper(mockCfg)
+
+		err := wrapper.Delete("key")
+		if err == nil {
+			t.Error("Expected error for config without Deleter")
+		}
+	})
+
+	t.Run("nil wrapper", func(t *testing.T) {
+		var wrapper *ext.ConfigWrapper
+		err := wrapper.Delete("key")
+		if err == nil {
+			t.Error("Expected error for nil wrapper")
+		}
+	})
+}
+
+func TestConfigWrapper_HasAllGetter(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("with config that supports AllGetter", func(t *testing.T) {
+		cfg := config.NewSimpleConfig(ctx)
+		wrapper := ext.NewConfigWrapper(cfg)
+
+		if !wrapper.HasAllGetter() {
+			t.Error("Expected HasAllGetter to return true for SimpleConfig")
+		}
+	})
+
+	t.Run("with config that doesn't support AllGetter", func(t *testing.T) {
+		mockCfg := newMockReadOnlyConfig(map[string]any{})
+		wrapper := ext.NewConfigWrapper(mockCfg)
+
+		if wrapper.HasAllGetter() {
+			t.Error("Expected HasAllGetter to return false for mock config")
+		}
+	})
+
+	t.Run("nil wrapper", func(t *testing.T) {
+		var wrapper *ext.ConfigWrapper
+		if wrapper.HasAllGetter() {
+			t.Error("Expected HasAllGetter to return false for nil wrapper")
+		}
+	})
+}
+
+func TestConfigWrapper_HasAllKeys(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("with config that supports AllKeysProvider", func(t *testing.T) {
+		cfg := config.NewSimpleConfig(ctx)
+		wrapper := ext.NewConfigWrapper(cfg)
+
+		if !wrapper.HasAllKeys() {
+			t.Error("Expected HasAllKeys to return true for SimpleConfig")
+		}
+	})
+
+	t.Run("with config that doesn't support AllKeysProvider", func(t *testing.T) {
+		mockCfg := newMockReadOnlyConfig(map[string]any{})
+		wrapper := ext.NewConfigWrapper(mockCfg)
+
+		if wrapper.HasAllKeys() {
+			t.Error("Expected HasAllKeys to return false for mock config")
+		}
+	})
+
+	t.Run("nil wrapper", func(t *testing.T) {
+		var wrapper *ext.ConfigWrapper
+		if wrapper.HasAllKeys() {
+			t.Error("Expected HasAllKeys to return false for nil wrapper")
+		}
+	})
+}
+
+func TestConfigWrapper_HasDeleter(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("with config that supports Deleter", func(t *testing.T) {
+		cfg := config.NewSimpleConfig(ctx)
+		wrapper := ext.NewConfigWrapper(cfg)
+
+		if !wrapper.HasDeleter() {
+			t.Error("Expected HasDeleter to return true for SimpleConfig")
+		}
+	})
+
+	t.Run("with config that doesn't support Deleter", func(t *testing.T) {
+		mockCfg := newMockReadOnlyConfig(map[string]any{})
+		wrapper := ext.NewConfigWrapper(mockCfg)
+
+		if wrapper.HasDeleter() {
+			t.Error("Expected HasDeleter to return false for mock config")
+		}
+	})
+
+	t.Run("nil wrapper", func(t *testing.T) {
+		var wrapper *ext.ConfigWrapper
+		if wrapper.HasDeleter() {
+			t.Error("Expected HasDeleter to return false for nil wrapper")
+		}
+	})
+}
+
+func TestConfigWrapper_InterfaceCompileCheck(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.NewSimpleConfig(ctx)
+	wrapper := ext.NewConfigWrapper(cfg)
+
+	// Runtime interface checks
+	var _ config.Config = wrapper
+	var _ config.MutableConfig = wrapper
+	var _ config.MarshableConfig = wrapper
+	var _ config.AllGetter = wrapper
+	var _ config.AllKeysProvider = wrapper
+	var _ config.Deleter = wrapper
+}
+
+// mockConfigNoAllGetter implements config.Config but NOT AllGetter
+// and returns error for empty key GetValue
+type mockConfigNoAllGetter struct {
+	data map[string]any
+}
+
+func (m *mockConfigNoAllGetter) Name() config.ProviderName {
+	return "mockConfigNoAllGetter"
+}
+
+func (m *mockConfigNoAllGetter) GetValue(ctx context.Context, key string) (any, error) {
+	if key == "" {
+		return nil, config.ErrConfigMissingValue.New("empty key not supported")
+	}
+	val, ok := m.data[key]
+	if !ok {
+		return nil, config.ErrConfigMissingValue.New("missing value", "key", key)
+	}
+	return val, nil
+}
+
+func (m *mockConfigNoAllGetter) GetConfig(ctx context.Context, key string) (config.Config, error) {
+	val, ok := m.data[key]
+	if !ok {
+		return nil, config.ErrConfigMissingValue.New("missing value", "key", key)
+	}
+	if subMap, ok := val.(map[string]any); ok {
+		return &mockConfigNoAllGetter{data: subMap}, nil
+	}
+	return nil, config.ErrConfigInvalidValue.New("not a map", "key", key)
+}
+
+func TestConfigWrapper_Unmarshal_RootWithoutAllGetter(t *testing.T) {
+	ctx := context.Background()
+
+	// Mock config that doesn't support AllGetter and returns error for empty key
+	mockCfg := &mockConfigNoAllGetter{
+		data: map[string]any{
+			"server": map[string]any{
+				"host": "localhost",
+				"port": 8080,
+			},
+		},
+	}
+	wrapper := ext.NewConfigWrapper(mockCfg)
+
+	// This should fail because root config can't be retrieved without AllGetter
+	var server WrapperServerConfig
+	err := wrapper.Unmarshal(ctx, "", &server)
+	if err == nil {
+		t.Error("Expected error when unmarshalling root without AllGetter support")
+	}
+}
+
+// mockConfigWithSubConfigNoAllGetter returns a sub-config that doesn't implement AllGetter
+type mockConfigWithSubConfigNoAllGetter struct {
+	data map[string]any
+}
+
+func (m *mockConfigWithSubConfigNoAllGetter) Name() config.ProviderName {
+	return "mockConfigWithSubConfigNoAllGetter"
+}
+
+func (m *mockConfigWithSubConfigNoAllGetter) GetValue(ctx context.Context, key string) (any, error) {
+	val, ok := m.data[key]
+	if !ok {
+		return nil, config.ErrConfigMissingValue.New("missing value", "key", key)
+	}
+	return val, nil
+}
+
+func (m *mockConfigWithSubConfigNoAllGetter) GetConfig(ctx context.Context, key string) (config.Config, error) {
+	val, ok := m.data[key]
+	if !ok {
+		return nil, config.ErrConfigMissingValue.New("missing value", "key", key)
+	}
+	if subMap, ok := val.(map[string]any); ok {
+		// Return a sub-config that doesn't implement AllGetter
+		return &mockConfigNoAllGetter{data: subMap}, nil
+	}
+	return nil, config.ErrConfigInvalidValue.New("not a map", "key", key)
+}
+
+func TestConfigWrapper_Unmarshal_NestedWithoutAllGetter(t *testing.T) {
+	ctx := context.Background()
+
+	// Mock config where GetConfig returns a config without AllGetter
+	// but GetValue returns the map directly
+	mockCfg := &mockConfigWithSubConfigNoAllGetter{
+		data: map[string]any{
+			"server": map[string]any{
+				"host": "localhost",
+				"port": 8080,
+			},
+		},
+	}
+	wrapper := ext.NewConfigWrapper(mockCfg)
+
+	// This should succeed because GetValue returns the map
+	var server WrapperServerConfig
+	err := wrapper.Unmarshal(ctx, "server", &server)
+	if err != nil {
+		t.Errorf("Unmarshal failed: %v", err)
+	}
+	if server.Host != "localhost" {
+		t.Errorf("Expected host 'localhost', got '%s'", server.Host)
+	}
+}
+
+// mockConfigNestedGetValueError returns error from GetValue for nested key
+type mockConfigNestedGetValueError struct {
+	data map[string]any
+}
+
+func (m *mockConfigNestedGetValueError) Name() config.ProviderName {
+	return "mockConfigNestedGetValueError"
+}
+
+func (m *mockConfigNestedGetValueError) GetValue(ctx context.Context, key string) (any, error) {
+	// Always return error for any key
+	return nil, config.ErrConfigMissingValue.New("always fails", "key", key)
+}
+
+func (m *mockConfigNestedGetValueError) GetConfig(ctx context.Context, key string) (config.Config, error) {
+	// Return a config that doesn't implement AllGetter
+	return &mockConfigNoAllGetter{data: map[string]any{}}, nil
+}
+
+func TestConfigWrapper_Unmarshal_NestedGetValueError(t *testing.T) {
+	ctx := context.Background()
+
+	mockCfg := &mockConfigNestedGetValueError{
+		data: map[string]any{},
+	}
+	wrapper := ext.NewConfigWrapper(mockCfg)
+
+	var server WrapperServerConfig
+	err := wrapper.Unmarshal(ctx, "server", &server)
+	if err == nil {
+		t.Error("Expected error when GetValue fails for nested key")
+	}
+}
+
+// mockConfigNestedNonMapValue returns non-map value from GetValue
+type mockConfigNestedNonMapValue struct{}
+
+func (m *mockConfigNestedNonMapValue) Name() config.ProviderName {
+	return "mockConfigNestedNonMapValue"
+}
+
+func (m *mockConfigNestedNonMapValue) GetValue(ctx context.Context, key string) (any, error) {
+	// Return a non-map value
+	return "not a map", nil
+}
+
+func (m *mockConfigNestedNonMapValue) GetConfig(ctx context.Context, key string) (config.Config, error) {
+	// Return a config that doesn't implement AllGetter
+	return &mockConfigNoAllGetter{data: map[string]any{}}, nil
+}
+
+func TestConfigWrapper_Unmarshal_NestedNonMapValue(t *testing.T) {
+	ctx := context.Background()
+
+	mockCfg := &mockConfigNestedNonMapValue{}
+	wrapper := ext.NewConfigWrapper(mockCfg)
+
+	var server WrapperServerConfig
+	err := wrapper.Unmarshal(ctx, "server", &server)
+	if err == nil {
+		t.Error("Expected error when GetValue returns non-map value")
+	}
+}
+
+func TestConfigWrapper_All_WithConfigWithoutAllGetter(t *testing.T) {
+	ctx := context.Background()
+
+	// Mock config that doesn't implement AllGetter
+	mockCfg := &mockConfigNoAllGetter{
+		data: map[string]any{"key": "value"},
+	}
+	wrapper := ext.NewConfigWrapper(mockCfg)
+
+	// All() should return empty map when AllGetter is not supported
+	all := wrapper.All(ctx)
+	if all == nil {
+		t.Error("Expected non-nil map")
+	}
+	if len(all) != 0 {
+		t.Error("Expected empty map for config without AllGetter")
 	}
 }
