@@ -2,6 +2,37 @@
 
 A comprehensive collection of Go utility packages providing foundational building blocks for Go applications.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Installation](#installation)
+- [Modules](#modules)
+    - [1. Platform Package](#1-platform-package)
+    - [2. System Package](#2-system-package)
+    - [3. GoSub Package](#3-gosub-package)
+    - [4. Registry Package](#4-registry-package)
+    - [5. IOUtils Package](#5-ioutils-package)
+    - [6. Logs Package](#6-logs-package)
+    - [7. Base Utils Package](#7-base-utils-package)
+    - [8. ErrExt Package](#8-errext-package)
+    - [9. Config Package](#9-config-package)
+    - [10. Config Ext Package](#10-config-ext-package)
+    - [11. Config Koanf Package](#11-config-koanf-package)
+    - [12. Config HTTP Package](#12-config-http-package)
+    - [13. Telemetry Package](#13-telemetry-package)
+    - [14. Telemetry Memory Package](#14-telemetry-memory-package)
+    - [15. Telemetry OTEL Package](#15-telemetry-otel-package)
+    - [16. Logger Package](#16-logger-package)
+- [Testing](#testing)
+- [Design Principles](#design-principles)
+- [Contributing](#contributing)
+- [Requirements](#requirements)
+- [License](#license)
+- [Support](#support)
+- [Module Documentation](#module-documentation)
+- [Quick Reference](#quick-reference)
+- [Changelog](#changelog)
+
 ## Overview
 
 The `base-utils` library provides a set of well-tested, production-ready utilities for common Go programming patterns including:
@@ -14,6 +45,8 @@ The `base-utils` library provides a set of well-tested, production-ready utiliti
 - **Type Utilities** - Comparison, equality, and string handling interfaces
 - **Generic Registry** - Type-safe registry with comparable keys
 - **Extended Error Handling** - Structured error generation, categorization, and templating
+- **Configuration Management** - Flexible, context-aware configuration management with extensions for struct unmarshalling, mutable configs, context-based config discovery, koanf integration for multi-source configuration loading, and HTTP handlers for RESTful config access
+- **Telemetry** - Vendor-agnostic observability API for distributed tracing and metrics collection
 
 ## Installation
 
@@ -487,11 +520,11 @@ type StringSecure interface {
 
 **Import:** `github.com/grinps/go-utils/errext`
 
-Extended error handling with error codes, types, and templating.
+Extended error handling with error codes, types, and structured attributes.
 
 #### Features
 - **Error Codes & Types** - Assign integer codes and string types to errors
-- **Templating** - Define error message templates with placeholders
+- **Structured Attributes** - Add slog-style key-value pairs for error context
 - **Stack Traces** - Optional stack trace capture for debugging
 - **Stdlib Compatibility** - Fully implements `error`, `errors.Is`, `errors.As`, `errors.Unwrap`
 - **Panic Recovery** - Utilities to safely handle panics
@@ -520,6 +553,690 @@ func init() {
 
 ---
 
+### 9. Config Package
+
+**Import:** `github.com/grinps/go-utils/config`
+
+A flexible, context-aware configuration management library supporting nested maps with dual retrieval APIs.
+
+#### Features
+- **Context Aware**: All configuration operations accept `context.Context`.
+- **Dual Retrieval APIs**: Direct `GetValue(ctx, key) (any, error)` and type-safe `GetValueE[T](ctx, key, *T) error`.
+- **Type-Safe Retrieval**: Generic `GetValueE[T]` function with compile-time type safety and pointer-based assignment.
+- **Default Value Pattern**: GetValueE preserves existing values when keys are not found.
+- **Dot-Notation Keys**: Access nested values using dot notation (e.g., `server.port`).
+- **Nested Configurations**: Retrieve sub-configurations via `GetConfig(ctx, key)`.
+- **Mutable Configurations**: `MutableConfig` interface for setting values with `SetValue(ctx, key, value)`.
+- **Marshable Configurations**: `MarshableConfig` interface for unmarshalling into structs.
+- **Simple In-Memory Implementation**: `SimpleConfig` implements all interfaces for easy testing.
+- **Structured Error Handling**: Uses `errext` package for rich error information.
+- **Built-in Telemetry**: Integrated tracing and metrics via the `telemetry` package.
+- **High Test Coverage**: ~95% test coverage.
+
+#### Core Interfaces
+
+```go
+// Config - Basic configuration retrieval
+type Config interface {
+    Name() ProviderName // Returns provider name (e.g., "SimpleConfig")
+    GetValue(ctx context.Context, key string) (any, error)
+    GetConfig(ctx context.Context, key string) (Config, error)
+}
+
+// MutableConfig - Supports setting values
+type MutableConfig interface {
+    Config
+    SetValue(ctx context.Context, key string, value any) error
+}
+
+// MarshableConfig - Supports unmarshalling into structs
+type MarshableConfig interface {
+    Config
+    Unmarshal(ctx context.Context, key string, target any, options ...any) error
+}
+```
+
+#### Optional Interfaces
+
+```go
+// AllGetter - Returns all configuration as a map
+type AllGetter interface {
+    All(ctx context.Context) map[string]any
+}
+
+// AllKeysProvider - Lists all configuration keys
+type AllKeysProvider interface {
+    Keys(prefix string) []string
+}
+
+// Deleter - Supports key deletion
+type Deleter interface {
+    Delete(key string) error
+}
+```
+
+`SimpleConfig` implements all optional interfaces:
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/config"
+    "log"
+)
+
+func main() {
+    ctx := context.Background()
+    data := map[string]any{
+        "server": map[string]any{
+            "host": "localhost",
+            "port": 8080,
+        },
+    }
+    cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+    
+    // Method 1: Direct GetValue - returns (any, error)
+    val, err := cfg.GetValue(ctx, "server.port")
+    if err != nil {
+        log.Fatal(err)
+    }
+    port := val.(int) // Type assertion required
+    
+    // Method 2: Type-safe GetValueE (recommended)
+    var host string
+    err = config.GetValueE(ctx, "server.host", &host)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // Method 3: Default value pattern
+    timeout := 30 // default
+    config.GetValueE(ctx, "server.timeout", &timeout)
+    // timeout remains 30 if key doesn't exist
+    
+    // Store config in context
+    ctx = config.ContextWithConfig(ctx, cfg)
+    
+    // Retrieve from context
+    cfg = config.ContextConfig(ctx, true)
+}
+```
+
+#### Setting Values
+
+```go
+// SimpleConfig implements MutableConfig
+cfg := config.NewSimpleConfig(ctx)
+
+// Set nested values (creates intermediate maps automatically)
+err := cfg.SetValue(ctx, "server.port", 9090)
+
+// Or use package-level function with context
+ctx = config.ContextWithConfig(ctx, cfg)
+err = config.SetValue(ctx, "server.host", "0.0.0.0")
+```
+
+#### Unmarshalling into Structs
+
+```go
+type ServerConfig struct {
+    Host string `config:"host"`
+    Port int    `config:"port"`
+}
+
+// SimpleConfig implements MarshableConfig
+var server ServerConfig
+err := cfg.Unmarshal(ctx, "server", &server)
+
+// Or use package-level function with context
+err = config.Unmarshal(ctx, "server", &server)
+```
+
+#### Key Functions
+- `NewSimpleConfig(ctx, opts...)` - Creates in-memory config
+- `GetValueE[T](ctx, key, *T)` - Type-safe retrieval from context
+- `GetValueWithConfig[T](ctx, cfg, key, *T)` - Type-safe retrieval with explicit config
+- `SetValue(ctx, key, value)` - Sets value in context config
+- `SetValueWithConfig(ctx, cfg, key, value)` - Sets value with explicit config
+- `Unmarshal[T](ctx, key, *T)` - Unmarshals into struct from context
+- `UnmarshalWithConfig[T](ctx, cfg, key, *T)` - Unmarshals with explicit config
+- `ContextWithConfig(ctx, cfg)` - Stores config in context
+- `ContextConfig(ctx, useDefault)` - Retrieves config from context
+- `SetTelemetryEnabled(bool)` - Globally toggle telemetry
+- `IsTelemetryEnabled()` - Check if telemetry is enabled
+
+#### Using Optional Interfaces
+
+```go
+// Get all configuration
+if allGetter, ok := cfg.(config.AllGetter); ok {
+    all := allGetter.All(ctx)
+}
+
+// List all keys
+if keysProvider, ok := cfg.(config.AllKeysProvider); ok {
+    keys := keysProvider.Keys("")           // All keys
+    serverKeys := keysProvider.Keys("server") // Keys with prefix
+}
+
+// Delete a key
+if deleter, ok := cfg.(config.Deleter); ok {
+    err := deleter.Delete("server.debug")
+}
+```
+
+---
+
+### 10. Config Ext Package
+
+**Import:** `github.com/grinps/go-utils/config/ext`
+
+Extended configuration utilities that build upon the base `config` package.
+
+#### Features
+- **ConfigWrapper**: Wraps any `config.Config` to provide `MarshableConfig` and `MutableConfig` capabilities with mapstructure fallback.
+- **Interface Passthrough**: Automatically detects and passes through calls to `AllGetter`, `AllKeysProvider`, and `Deleter` interfaces.
+- **Telemetry Support**: Implements `config.TelemetryAware` for telemetry integration.
+- **Mapstructure Fallback**: Automatic fallback to mapstructure for configs that don't natively support unmarshalling.
+- **Flexible Options**: Customizable unmarshalling via functional options (tag names, strict mode, decode hooks).
+- **Type Conversions**: Automatic string-to-duration, string-to-slice, and weak type conversions.
+- **High Test Coverage**: >98% test coverage.
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/config"
+    "github.com/grinps/go-utils/config/ext"
+)
+
+type ServerConfig struct {
+    Host string `config:"host"`
+    Port int    `config:"port"`
+}
+
+func main() {
+    ctx := context.Background()
+    data := map[string]any{
+        "server": map[string]any{"host": "localhost", "port": 8080},
+    }
+    cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(data))
+    
+    // Wrap config to get consistent unmarshalling
+    wrapper := ext.NewConfigWrapper(cfg)
+    
+    // Unmarshal using mapstructure fallback
+    var server ServerConfig
+    if err := wrapper.Unmarshal(ctx, "server", &server); err != nil {
+        log.Fatal(err)
+    }
+    
+    // SetValue if config supports it
+    if wrapper.IsMutable() {
+        wrapper.SetValue(ctx, "server.port", 9090)
+    }
+}
+```
+
+#### Key Functions
+- `NewConfigWrapper(cfg)` - Wraps config with mapstructure fallback
+- `wrapper.Name()` - Returns "ConfigWrapper" provider name
+- `wrapper.Unmarshal(ctx, key, target, opts...)` - Unmarshals config into struct
+- `wrapper.SetValue(ctx, key, value)` - Sets value if config is mutable
+- `wrapper.All(ctx)` - Returns all config (passthrough if supported)
+- `wrapper.Keys(prefix)` - Returns keys with prefix (passthrough if supported)
+- `wrapper.Delete(key)` - Deletes key (passthrough if supported)
+- `wrapper.IsMutable()` - Checks if config supports mutation
+- `wrapper.IsMarshable()` - Checks if config has native unmarshal support
+- `wrapper.HasAllGetter()` - Checks if wrapped config implements AllGetter
+- `wrapper.HasAllKeys()` - Checks if wrapped config implements AllKeysProvider
+- `wrapper.HasDeleter()` - Checks if wrapped config implements Deleter
+- `wrapper.ShouldInstrument(ctx, key, op)` - Returns true (telemetry enabled)
+- `wrapper.GenerateTelemetryAttributes(ctx, op, attrs)` - Returns attrs as-is
+
+---
+
+### 11. Config Koanf Package
+
+**Import:** `github.com/grinps/go-utils/config/koanf`
+
+A wrapper around [knadh/koanf](https://github.com/knadh/koanf) that implements the `config.Config`, `config.MutableConfig`, and `config.MarshableConfig` interfaces.
+
+#### Features
+- **Standard Interface Implementation**: Implements `config.Config`, `config.MutableConfig`, and `config.MarshableConfig`.
+- **Telemetry Support**: Implements `config.TelemetryAware` for telemetry integration.
+- **Multiple Configuration Sources**: Files, environment variables, command-line flags, S3, Consul, Vault, and more.
+- **Nested Configuration**: Access nested values using dot-notation keys (customizable delimiter).
+- **Type-Safe Unmarshalling**: Unmarshal to structs with support for multiple tag formats (koanf, json, yaml, mapstructure).
+- **Provider-Based Loading**: Load from various sources using koanf's provider system.
+- **Configuration Merging**: Merge multiple configurations with override support.
+- **High Test Coverage**: >94% test coverage.
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/config/koanf"
+    "github.com/knadh/koanf/parsers/json"
+    "github.com/knadh/koanf/providers/file"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create config and load from JSON file
+    cfg, _ := koanf.NewKoanfConfig(ctx,
+        koanf.WithProvider(file.Provider("config.json"), json.Parser()),
+    )
+    
+    // Get values
+    port, _ := cfg.GetValue(ctx, "server.port")
+    
+    // Unmarshal to struct
+    type ServerConfig struct {
+        Host string `koanf:"host"`
+        Port int    `koanf:"port"`
+    }
+    var server ServerConfig
+    cfg.(*koanf.KoanfConfig).Unmarshal(ctx, "server", &server)
+}
+```
+
+#### Key Functions
+- `NewKoanfConfig(ctx, opts...)` - Creates new koanf config
+- `FromKoanf(k, opts...)` - Wraps existing koanf instance
+- `cfg.Name()` - Returns "KoanfConfig" provider name
+- `cfg.Load(ctx, provider, parser)` - Loads from provider
+- `cfg.Merge(ctx, other)` - Merges another config
+- `cfg.All(ctx)` - Returns all config as map
+- `cfg.Keys(prefix)` - Returns keys with prefix
+- `cfg.Delete(key)` - Deletes a key
+- `cfg.ShouldInstrument(ctx, key, op)` - Returns true (telemetry enabled)
+
+---
+
+### 12. Config HTTP Package
+
+**Import:** `github.com/grinps/go-utils/config/http`
+
+A RESTful HTTP handler for exposing configuration values via HTTP endpoints.
+
+#### Features
+- **RESTful API**: GET, PUT, DELETE operations on configuration keys
+- **Interface Detection**: Automatically detects `MutableConfig`, `AllKeysProvider`, `Deleter`, and `AllGetter` interfaces
+- **Key Filtering**: Optional key filter to hide sensitive configuration values
+- **Meta Endpoints**: `/_meta/info` for capabilities, `/_meta/keys` for key listing
+- **Admin Endpoints**: `/_admin/reload` for configuration reloading (when configured)
+- **Read-Only Mode**: Optional read-only mode to disable mutations
+- **Custom Delimiters**: Configurable key delimiter for URL paths
+- **Middleware Support**: Standard HTTP middleware chain support
+- **High Test Coverage**: >97% test coverage
+
+#### Quick Example
+
+```go
+import (
+    "net/http"
+    "github.com/grinps/go-utils/config"
+    confighttp "github.com/grinps/go-utils/config/http"
+)
+
+func main() {
+    ctx := context.Background()
+    cfg := config.NewSimpleConfig(ctx, config.WithConfigurationMap(map[string]any{
+        "server": map[string]any{"host": "localhost", "port": 8080},
+    }))
+    
+    // Create handler
+    handler := confighttp.NewHandler(cfg)
+    
+    // Mount at /config
+    http.Handle("/config/", http.StripPrefix("/config", handler))
+    http.ListenAndServe(":8080", nil)
+}
+```
+
+#### HTTP Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Get all configuration (requires AllGetter) |
+| GET | `/{key}` | Get configuration value |
+| HEAD | `/{key}` | Check if key exists |
+| PUT | `/{key}` | Set configuration value (requires MutableConfig) |
+| DELETE | `/{key}` | Delete configuration key (requires Deleter) |
+| GET | `/_meta/info` | Get handler capabilities |
+| GET | `/_meta/keys` | List all keys (requires AllKeysProvider) |
+| POST | `/_admin/reload` | Reload configuration (when configured) |
+
+#### Key Functions
+- `NewHandler(cfg, opts...)` - Creates HTTP handler for config
+- `WithReadOnly(bool)` - Enable/disable read-only mode
+- `WithKeyFilter(func)` - Filter sensitive keys from responses
+- `WithBasePath(path)` - Set base path for URL routing
+- `WithDelimiter(delim)` - Set key delimiter (default: ".")
+- `WithReloadHandler(func)` - Enable reload endpoint
+- `WithMiddleware(mw...)` - Add HTTP middleware
+- `WithMetaDisabled(bool)` - Disable meta endpoints
+- `WithAdminDisabled(bool)` - Disable admin endpoints
+
+---
+
+### 13. Telemetry Package
+
+**Import:** `github.com/grinps/go-utils/telemetry`
+
+A vendor-agnostic API for application observability including distributed tracing and metrics collection.
+
+#### Features
+- **Provider Interface** - Entry point for creating Tracers and Meters
+- **Distributed Tracing** - Span-based tracing with context propagation
+- **Metrics Collection** - Counter, Recorder, and Observable instruments
+- **Async Instruments** - ObservableCounter and ObservableGauge with callback pattern
+- **Context Integration** - Store and retrieve providers from context
+- **Default Provider** - NoopProvider for graceful degradation
+- **Error Handling Strategy** - Configurable error handling for testing
+- **Thread Safe** - All interfaces designed for concurrent use
+
+#### Core Interfaces
+
+```go
+// Provider - Entry point for telemetry
+type Provider interface {
+    Tracer(name string, opts ...any) (Tracer, error)
+    Meter(name string, opts ...any) (Meter, error)
+    Shutdown(ctx context.Context) error
+}
+
+// Tracer - Creates spans for distributed tracing
+type Tracer interface {
+    Start(ctx context.Context, name string, opts ...any) (context.Context, Span)
+}
+
+// Span - Represents a unit of work
+type Span interface {
+    End(opts ...any)
+    IsRecording() bool
+    SetAttributes(attrs ...any)
+    AddEvent(name string, opts ...any)
+    RecordError(err error, opts ...any)
+    SetStatus(code int, description string)
+    SetName(name string)
+    TracerProvider() Provider
+}
+
+// Meter - Creates metric instruments
+type Meter interface {
+    NewInstrument(name string, opts ...any) (Instrument, error)
+}
+
+// Observable instruments with callback pattern
+type Callback[T int64 | float64] func(ctx context.Context, observer Observer[T])
+type Observer[T int64 | float64] interface {
+    Observe(value T, attrs ...any)
+}
+```
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/telemetry"
+)
+
+func main() {
+    // Get the default provider (NoopProvider)
+    provider := telemetry.Default()
+
+    // Create a tracer
+    tracer, _ := provider.Tracer("my-service")
+
+    // Start a span
+    ctx, span := tracer.Start(context.Background(), "operation")
+    defer span.End()
+
+    // Add attributes and events
+    span.SetAttributes("user.id", "12345")
+    span.AddEvent("processing-started")
+
+    // Create a meter and instrument
+    meter, _ := provider.Meter("my-service")
+    counter, _ := meter.NewInstrument("requests_total",
+        telemetry.InstrumentTypeCounter,
+        telemetry.CounterTypeMonotonic,
+    )
+    
+    // Create observable gauge with callback
+    gauge, _ := meter.NewInstrument("memory_usage",
+        telemetry.InstrumentTypeObservableGauge,
+        telemetry.WithCallback(func(ctx context.Context, obs telemetry.Observer[int64]) {
+            obs.Observe(getCurrentMemory())
+        }),
+    )
+}
+```
+
+#### Context Propagation
+
+```go
+// Store provider in context
+ctx := telemetry.ContextWithTelemetry(ctx, provider)
+
+// Retrieve provider from context (second param controls fallback)
+provider := telemetry.ContextTelemetry(ctx, true)  // falls back to Default()
+provider := telemetry.ContextTelemetry(ctx, false) // returns nil if not found
+
+// Store and retrieve tracer/meter from context
+ctx = telemetry.ContextWithTracer(ctx, tracer)
+tracer := telemetry.ContextTracer(ctx, true)       // falls back to noop
+
+ctx = telemetry.ContextWithMeter(ctx, meter)
+meter := telemetry.ContextMeter(ctx, true)         // falls back to noop
+
+// Create type-safe instrument from context's meter
+counter, err := telemetry.NewInstrument[telemetry.Counter[int64]](ctx, "requests",
+    telemetry.InstrumentTypeCounter, telemetry.CounterTypeMonotonic)
+```
+
+#### Key Functions
+- `Default()` - Returns the default provider (NoopProvider)
+- `AsDefault(provider)` - Sets a custom default provider
+- `ContextWithTelemetry(ctx, provider)` - Stores provider in context
+- `ContextTelemetry(ctx, defaultIfNotAvailable)` - Retrieves provider from context
+- `ContextWithTracer(ctx, tracer)` - Stores tracer in context
+- `ContextTracer(ctx, defaultIfNotAvailable)` - Retrieves tracer from context
+- `ContextTracerE(ctx, defaultIfNotAvailable)` - Retrieves tracer with error handling
+- `ContextWithMeter(ctx, meter)` - Stores meter in context
+- `ContextMeter(ctx, defaultIfNotAvailable)` - Retrieves meter from context
+- `ContextMeterE(ctx, defaultIfNotAvailable)` - Retrieves meter with error handling
+- `NewInstrument[T](ctx, name, opts...)` - Creates type-safe instrument from context's meter
+
+---
+
+### 14. Telemetry Memory Package
+
+**Import:** `github.com/grinps/go-utils/telemetry/memory`
+
+An in-memory implementation of the telemetry interfaces for testing and development.
+
+#### Features
+- **Full Interface Implementation** - Implements Provider, Tracer, Span, and Meter interfaces
+- **Test Assertions** - Access recorded spans and metrics for test verification
+- **Thread Safe** - All operations are safe for concurrent use
+- **Span Relationships** - Support for parent-child span relationships
+- **Generic Instruments** - Counter[T], Recorder[T], ObservableCounter[T], and ObservableGauge[T]
+- **Observable Instruments** - Async instruments with callback-based observation
+- **Key-Value Options** - Minimal dependency usage with string key-value pairs
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/telemetry"
+    "github.com/grinps/go-utils/telemetry/memory"
+)
+
+func TestMyService(t *testing.T) {
+    // Create in-memory provider
+    provider := memory.NewProvider()
+    defer provider.Shutdown(context.Background())
+
+    // Create tracer and span
+    tracer, _ := provider.Tracer("test-service")
+    ctx, span := tracer.Start(context.Background(), "operation")
+    span.SetAttributes("user.id", "12345")  // Key-value pairs
+    span.End()
+
+    // Assert on recorded spans
+    spans := provider.RecordedSpans()
+    if len(spans) != 1 {
+        t.Fatalf("expected 1 span, got %d", len(spans))
+    }
+    if !spans[0].HasAttribute("user.id") {
+        t.Error("expected user.id attribute")
+    }
+
+    // Create meter and instrument
+    meter, _ := provider.Meter("test-service")
+    inst, _ := meter.NewInstrument("requests",
+        telemetry.InstrumentTypeCounter,
+        telemetry.CounterTypeMonotonic,
+    )
+    counter := inst.(telemetry.Counter[int64])
+    counter.Add(ctx, 1, "method", "GET")  // Key-value attributes
+
+    // Assert on recorded metrics
+    m := meter.(*memory.Meter)
+    measurements := m.RecordedMeasurements()
+    if len(measurements) != 1 {
+        t.Fatalf("expected 1 measurement, got %d", len(measurements))
+    }
+}
+```
+
+#### Minimal Dependency Usage
+
+Pass options as key-value pairs to avoid importing memory package types:
+
+```go
+// Tracer/Meter with version and custom attributes
+tracer, _ := provider.Tracer("my-service", 
+    "version", "1.0.0",
+    "service.env", "production",
+)
+
+// Instrument attributes as key-value pairs
+counter.Add(ctx, 1, "user.id", "12345", "request.size", 1024)
+span.AddEvent("cache-hit", "cache.key", "user:123")
+```
+
+#### Key Types
+- `Provider` - In-memory telemetry provider with recorded data access
+- `RecordedSpan` - Captured span data with assertion helpers
+- `RecordedMeasurement` - Captured metric measurement
+- `Meter` - In-memory meter with measurement recording
+- `Counter[T]` - Generic counter instrument
+- `Recorder[T]` - Generic recorder instrument
+- `ObservableCounter[T]` - Async counter with callback registration
+- `ObservableGauge[T]` - Async gauge with callback registration
+
+---
+
+### 15. Telemetry OTEL Package
+
+**Import:** `github.com/grinps/go-utils/telemetry/otel`
+
+An OpenTelemetry-based implementation of the telemetry interfaces using `go.opentelemetry.io/contrib/otelconf` for declarative configuration.
+
+#### Features
+- **Full Provider Implementation** - Complete `telemetry.Provider` using OpenTelemetry SDK
+- **Declarative Configuration** - Uses otelconf.OpenTelemetryConfiguration schema
+- **Config Package Integration** - Load configuration via `config.Config` with YAML parsing
+- **OTLP Export** - Built-in support for OTLP gRPC and HTTP exporters
+- **Embedded Types** - Tracer and Meter embed their OpenTelemetry counterparts
+- **Observable Instruments** - Full support for async metrics with unified observer pattern
+- **Resource Configuration** - Service name, namespace, version via `attributes_list`
+
+#### Quick Example
+
+```go
+import (
+    "context"
+    "github.com/grinps/go-utils/config"
+    "github.com/grinps/go-utils/config/ext"
+    "github.com/grinps/go-utils/telemetry/otel"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Create config with OTLP gRPC exporter
+    cfg := ext.NewConfigWrapper(config.NewSimpleConfig(ctx, config.WithConfigurationMap(map[string]any{
+        "opentelemetry": map[string]any{
+            "file_format": "0.3",
+            "resource": map[string]any{
+                "attributes_list": "service.name=my-service,service.version=1.0.0",
+            },
+            "tracer_provider": map[string]any{
+                "processors": []any{
+                    map[string]any{
+                        "batch": map[string]any{
+                            "exporter": map[string]any{
+                                "otlp_grpc": map[string]any{
+                                    "endpoint": "localhost:4317",
+                                    "insecure": true,
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    })))
+    
+    // Create provider from config
+    provider, err := otel.NewProviderFromConfig(ctx, cfg)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer provider.Shutdown(ctx)
+    
+    // Use tracer
+    tracer, _ := provider.Tracer("my-service")
+    ctx, span := tracer.Start(ctx, "operation")
+    defer span.End()
+}
+```
+
+#### Integration Testing
+
+```bash
+# Start OpenTelemetry Collector
+docker run \
+  -p 127.0.0.1:4317:4317 \
+  -p 127.0.0.1:4318:4318 \
+  --name otel-collector \
+  otel/opentelemetry-collector:0.141.0 \
+  --config /etc/otelcol/config.yaml \
+  --config 'yaml:service::pipelines::metrics::receivers: [otlp]'
+
+# Run integration tests
+go test -tags=integration ./...
+```
+
+#### Key Functions
+- `NewProvider(ctx, opts...)` - Create with options
+- `NewProviderFromConfig(ctx, config.Config)` - Create from config (recommended)
+- `LoadConfiguration(ctx, config.Config)` - Load otelconf config using YAML + ParseYAML
+- `DefaultConfiguration()` - Get default configuration
+
+---
+
 ## Testing
 
 All packages include comprehensive test coverage:
@@ -538,6 +1255,13 @@ go test ./platform/...
 ### Test Coverage
 
 - **Platform Package**: 93.2%
+- **Config Package**: ~95%
+- **Config Ext Package**: >98%
+- **Config Koanf Package**: >94%
+- **Config HTTP Package**: >97%
+- **Telemetry Package**: 100%
+- **Telemetry Memory Package**: 97.4%
+- **Telemetry OTEL Package**: 80.1%
 - **System Package**: Comprehensive unit tests
 - **GoSub Package**: Selection and event tests
 - **Registry Package**: Generic type tests
@@ -563,211 +1287,7 @@ Mock implementations provided for all major interfaces, enabling comprehensive u
 ### 5. **Zero External Dependencies**
 Core packages minimize external dependencies, relying primarily on the Go standard library.
 
----
 
-## Usage Patterns
-
-### Dependency Injection
-
-```go
-type MyService struct {
-    platform platform.Platform
-    system   system.System
-}
-
-func NewMyService(p platform.Platform, s system.System) *MyService {
-    return &MyService{
-        platform: p,
-        system:   s,
-    }
-}
-
-// Production
-service := NewMyService(
-    platform.NewOSPlatform(),
-    system.NewSystem(),
-)
-
-// Testing
-service := NewMyService(
-    platform.NewMockPlatform(),
-    system.NewMockSystem(),
-)
-```
-
-### Channel Selection
-
-```go
-func MonitorChannels(ctx context.Context) {
-    collection := gosub.NewSelectCollection()
-    
-    // Add context monitoring
-    collection.Register(gosub.NewContextSelection(ctx, func(event gosub.SelectEvent, col gosub.SelectCollection) bool {
-        log.Println("Context cancelled")
-        return false // Stop selecting
-    }))
-    
-    // Add signal monitoring
-    sigChan := make(chan os.Signal, 1)
-    signal.Notify(sigChan, os.Interrupt)
-    collection.Register(gosub.NewSignalSelection(sigChan, func(event gosub.SelectEvent, col gosub.SelectCollection) bool {
-        log.Println("Signal received")
-        return false
-    }))
-    
-    collection.Initialize()
-    collection.Select()
-}
-```
-
-### Service Registry
-
-```go
-func SetupServices(ctx context.Context) error {
-    sys := system.NewSystem()
-    
-    // Register services
-    sys.RegisterService(ctx, "database", dbInstance)
-    sys.RegisterService(ctx, "cache", cacheInstance)
-    sys.RegisterService(ctx, "logger", loggerInstance)
-    
-    // Retrieve and use services
-    db, err := sys.GetService(ctx, "database", "Database")
-    if err != nil {
-        return err
-    }
-    
-    // Use db...
-    return nil
-}
-```
-
----
-
-## Best Practices
-
-### 1. Use Platform Abstraction for OS Operations
-
-❌ **Don't:**
-```go
-func LoadConfig() error {
-    data, err := os.ReadFile("/etc/config.json")
-    // ...
-}
-```
-
-✅ **Do:**
-```go
-func LoadConfig(p platform.Platform) error {
-    data, err := p.File().ReadFile("/etc/config.json")
-    // ...
-}
-```
-
-### 2. Leverage Dependency Injection
-
-❌ **Don't:**
-```go
-func ProcessData() {
-    db := database.NewConnection() // Hard-coded dependency
-    // ...
-}
-```
-
-✅ **Do:**
-```go
-func ProcessData(sys system.System) {
-    db, _ := sys.GetService(ctx, "database", "Database")
-    // ...
-}
-```
-
-### 3. Use Context for Cancellation
-
-❌ **Don't:**
-```go
-func LongRunningTask() {
-    for {
-        // No way to cancel
-        doWork()
-    }
-}
-```
-
-✅ **Do:**
-```go
-func LongRunningTask(ctx context.Context) {
-    for {
-        select {
-        case <-ctx.Done():
-            return
-        default:
-            doWork()
-        }
-    }
-}
-```
-
-### 4. Mock in Tests
-
-```go
-func TestMyService(t *testing.T) {
-    // Setup mocks
-    mockPlatform := platform.NewMockPlatform()
-    mockPlatform.Env().Setenv("API_KEY", "test-key")
-    mockPlatform.File().WriteFile("/config.json", []byte(`{}`), 0644)
-    
-    // Test with mocks
-    service := NewMyService(mockPlatform)
-    result := service.DoWork()
-    
-    // Assertions...
-}
-```
-
----
-
-## Migration Guide
-
-### From Direct OS Calls to Platform Abstraction
-
-**Before:**
-```go
-func SaveData(filename string, data []byte) error {
-    return os.WriteFile(filename, data, 0644)
-}
-```
-
-**After:**
-```go
-func SaveData(p platform.Platform, filename string, data []byte) error {
-    return p.File().WriteFile(filename, data, 0644)
-}
-```
-
-### From Global Variables to Dependency Injection
-
-**Before:**
-```go
-var globalDB *Database
-
-func ProcessRecord(id int) error {
-    return globalDB.Update(id)
-}
-```
-
-**After:**
-```go
-func ProcessRecord(sys system.System, id int) error {
-    db, err := sys.GetService(ctx, "database", "Database")
-    if err != nil {
-        return err
-    }
-    return db.(*Database).Update(id)
-}
-```
-
----
 
 ## Contributing
 
@@ -814,6 +1334,13 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | **logs** | Logging utilities | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/base-utils/logs.svg)](https://pkg.go.dev/github.com/grinps/go-utils/base-utils/logs) |
 | **base-utils** | Core utilities | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/base-utils.svg)](https://pkg.go.dev/github.com/grinps/go-utils/base-utils) |
 | **errext** | Extended error handling | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/errext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/errext) |
+| **config** | Configuration management | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config) |
+| **config/ext** | Config extensions (ConfigWrapper) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/ext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/ext) |
+| **config/koanf** | Koanf wrapper for Config interfaces | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/koanf.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/koanf) |
+| **config/http** | RESTful HTTP handler for config | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/http.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/http) |
+| **telemetry** | Observability API (tracing & metrics) | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry) |
+| **telemetry/memory** | In-memory telemetry for testing | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/memory.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/memory) |
+| **telemetry/otel** | OpenTelemetry implementation | [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/otel.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/otel) |
 
 ---
 
@@ -829,6 +1356,13 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 | `logs` | Logging | `Log()`, `Warn()` |
 | `base_utils` | Core utilities | `Equality`, `Comparable` |
 | `errext` | Error handling | `ErrorCode`, `Error` |
+| `config` | Configuration | `Config`, `MutableConfig`, `MarshableConfig`, `AllGetter`, `AllKeysProvider`, `Deleter` |
+| `config/ext` | Config extensions | `ConfigWrapper`, `TelemetryAware` |
+| `config/koanf` | Koanf wrapper | `KoanfConfig`, `TelemetryAware` |
+| `config/http` | HTTP config handler | `Handler`, `HandlerOption` |
+| `telemetry` | Observability | `Provider`, `Tracer`, `Meter` |
+| `telemetry/memory` | In-memory telemetry | `Provider`, `RecordedSpan`, `Meter` |
+| `telemetry/otel` | OpenTelemetry impl | `Provider`, `Tracer`, `Meter` |
 
 ---
 
@@ -937,10 +1471,10 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 
 ### Errext Package
 
-#### Current (November 2025)
+#### [v0.8.0](https://github.com/grinps/go-utils/releases/tag/errext/v0.8.0)
 - ✅ **Initial Release** - Structured error handling
 - ✅ **Error Codes & Types** - Integer codes and string categorization
-- ✅ **Templating** - Message templates with parameters
+- ✅ **Structured Attributes** - slog-style key-value pairs for error context
 - ✅ **Stack Traces** - Optional stack capture
 - ✅ **Stdlib Compatibility** - `errors.Is` and `errors.As` support
 
@@ -948,7 +1482,192 @@ Each package has comprehensive Go documentation available on pkg.go.dev:
 
 ---
 
+### Config Package
+
+#### [v0.5.0](https://github.com/grinps/go-utils/releases/tag/config/v0.5.0) (January 2026)
+- ✅ **Optional Interfaces** - Added `AllGetter`, `AllKeysProvider`, and `Deleter` interfaces to core package
+- ✅ **SimpleConfig Enhancements** - `SimpleConfig` now implements all optional interfaces
+- ✅ **All() Method** - Returns entire configuration as `map[string]any`
+- ✅ **Keys() Method** - Returns all keys with optional prefix filtering
+- ✅ **Delete() Method** - Deletes configuration keys with nested map support
+- ✅ **Interface Relocation** - Moved interfaces from `config/http` to core `config` package
+- ✅ **Updated Documentation** - Comprehensive documentation for optional interfaces
+
+#### [v0.4.0](https://github.com/grinps/go-utils/releases/tag/config/v0.4.0) (January 2026)
+- ✅ **Telemetry Integration** - Built-in tracing and metrics via the `telemetry` package
+- ✅ **ProviderName Type** - Added `ProviderName` type and `Name()` method to `Config` interface
+- ✅ **TelemetryAware Interface** - Optional interface for fine-grained telemetry control and custom attributes
+- ✅ **Global Telemetry Toggle** - `SetTelemetryEnabled(bool)` and `IsTelemetryEnabled()` functions
+- ✅ **Operation Metrics** - Automatic counters and histograms for `get_value`, `set_value`, `get_config`, `unmarshal`
+- ✅ **Error Counters** - Dedicated `config.errors.count` metric with error code attributes
+- ✅ **Span Parenting** - Proper context propagation for distributed tracing
+- ✅ **Key Prefix Attributes** - Cardinality-controlled `config.key_prefix` attribute
+- ✅ **Updated Documentation** - Comprehensive telemetry section in doc.go and README.md
+
+#### [v0.3.0](https://github.com/grinps/go-utils/releases/tag/config/v0.3.0) (November 2025)
+- ✅ **GetValueWithConfig** - Type-safe retrieval with explicit config parameter
+- ✅ **GetConfigWithConfig** - Nested config retrieval with explicit config parameter
+- ✅ **SetAsDefault** - Set custom default configuration
+
+#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/config/v0.2.0) (November 2025)
+- ✅ **Initial Release** - Flexible, context-aware configuration management
+- ✅ **Context Aware** - All configuration operations accept `context.Context`.
+- ✅ **Type-Safe Retrieval** - Generic `GetValueE[T]` functions.
+- ✅ **Context-Based Functions** - `Unmarshal` and `SetValue` extract config from context automatically
+- ✅ **MutableConfig Interface** - Defines `SetValue` for modifying configuration
+- ✅ **MarshableConfig Interface** - Defines `Unmarshal` for struct unmarshalling
+- ✅ **Dot-Notation Keys** - Access nested values using dot notation (e.g., `server.port`).
+- ✅ **Simple In-Memory Implementation** - Includes `SimpleConfig` for easy testing and mocking.
+- ✅ **Structured Error Handling** - Uses `errext` package for rich error information.
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config)
+
+---
+
+### Config Ext Package
+
+#### [v0.4.0](https://github.com/grinps/go-utils/releases/tag/config/ext/v0.4.0) (January 2026)
+- ✅ **Interface Passthrough** - Automatically passes through `AllGetter`, `AllKeysProvider`, and `Deleter` calls
+- ✅ **Keys() Method** - Returns keys from wrapped config if `AllKeysProvider` is supported
+- ✅ **Delete() Method** - Deletes keys from wrapped config if `Deleter` is supported
+- ✅ **HasAllGetter()** - Check if wrapped config implements `AllGetter`
+- ✅ **HasAllKeys()** - Check if wrapped config implements `AllKeysProvider`
+- ✅ **HasDeleter()** - Check if wrapped config implements `Deleter`
+- ✅ **Updated to config v0.5.0** - Dependency updated to latest config package
+- ✅ **High Test Coverage** - Increased to >98% test coverage
+
+#### [v0.3.0](https://github.com/grinps/go-utils/releases/tag/config/ext/v0.3.0) (January 2026)
+- ✅ **TelemetryAware Implementation** - Implements `config.TelemetryAware` interface
+- ✅ **Name() Method** - Returns "ConfigWrapper" for telemetry identification
+- ✅ **ShouldInstrument()** - Always returns true (telemetry enabled)
+- ✅ **GenerateTelemetryAttributes()** - Returns attributes as-is for telemetry
+- ✅ **Updated to config v0.4.0** - Dependency updated to latest config package
+
+#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/config/ext/v0.2.0) (November 2025)
+- ✅ **ConfigWrapper** - Wraps any `config.Config` with `MarshableConfig` and `MutableConfig` capabilities
+- ✅ **Flexible Unmarshal Options** - Tag names (`json`, `yaml`, `mapstructure`), strict mode, decode hooks
+- ✅ **Mapstructure Fallback** - `ConfigWrapper` provides mapstructure-based unmarshalling for any config
+- ✅ **Type Conversions** - String-to-duration, string-to-slice, weak type conversions
+- ✅ **High Test Coverage** - >96% test coverage
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/ext.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/ext)
+
+---
+
+### Config Koanf Package
+
+#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/config/koanf/v0.2.0) (January 2026)
+- ✅ **TelemetryAware Implementation** - Implements `config.TelemetryAware` interface
+- ✅ **Name() Method** - Returns "KoanfConfig" for telemetry identification
+- ✅ **ShouldInstrument()** - Always returns true (telemetry enabled)
+- ✅ **GenerateTelemetryAttributes()** - Returns attributes as-is for telemetry
+- ✅ **Updated to config v0.4.0** - Dependency updated to latest config package
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/config/koanf/v0.1.0) (November 2025)
+- ✅ **Initial Release** - Koanf wrapper implementing Config, MutableConfig, and MarshableConfig interfaces
+- ✅ **Multiple Configuration Sources** - Support for files, env vars, command-line flags, S3, Consul, Vault, and more via koanf providers
+- ✅ **Provider-Based Loading** - Load configuration from various sources using koanf's extensive provider ecosystem
+- ✅ **Multiple Tag Support** - Unmarshal with koanf, json, yaml, or mapstructure tags
+- ✅ **Configuration Merging** - Merge multiple configurations with override support
+- ✅ **Flat Path Support** - Support for flat path unmarshalling (e.g., `server.port` as single tag)
+- ✅ **Custom Delimiters** - Configurable key delimiter (default: ".")
+- ✅ **Structured Error Handling** - Uses `errext` package for rich error information
+- ✅ **High Test Coverage** - >94% test coverage with comprehensive test suite
+- ✅ **Complete Documentation** - Full API documentation, examples, and usage patterns
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/koanf.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/koanf)
+
+---
+
+### Config HTTP Package
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/config/http/v0.1.0) (January 2026)
+- ✅ **Initial Release** - RESTful HTTP handler for configuration management
+- ✅ **RESTful API** - GET, PUT, DELETE operations on configuration keys
+- ✅ **Interface Detection** - Automatically detects `MutableConfig`, `AllKeysProvider`, `Deleter`, `AllGetter`
+- ✅ **Key Filtering** - Optional key filter to hide sensitive configuration values
+- ✅ **Meta Endpoints** - `/_meta/info` for capabilities, `/_meta/keys` for key listing
+- ✅ **Admin Endpoints** - `/_admin/reload` for configuration reloading
+- ✅ **Read-Only Mode** - Optional read-only mode to disable mutations
+- ✅ **Custom Delimiters** - Configurable key delimiter for URL paths
+- ✅ **Middleware Support** - Standard HTTP middleware chain support
+- ✅ **Structured Error Handling** - Uses `errext` package for rich error information
+- ✅ **High Test Coverage** - >97% test coverage with comprehensive test suite
+- ✅ **Complete Documentation** - Full API documentation, examples, and usage patterns
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/config/http.svg)](https://pkg.go.dev/github.com/grinps/go-utils/config/http)
+
+---
+
+### Telemetry Package
+
+#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/telemetry/v0.2.0) (December 2025)
+- ✅ **Context Tracer/Meter Functions** - `ContextWithTracer`, `ContextTracer`, `ContextTracerE` for tracer context propagation
+- ✅ **Context Meter Functions** - `ContextWithMeter`, `ContextMeter`, `ContextMeterE` for meter context propagation
+- ✅ **Generic NewInstrument** - Type-safe `NewInstrument[T]` for creating instruments with compile-time type checking
+- ✅ **ContextTelemetry Update** - Added `defaultIfNotAvailable` boolean parameter for explicit fallback control
+- 🔧 **Removed NewTracer/NewMeter** - Replaced by `ContextTracerE` and `ContextMeterE` functions
+- 🐛 **Fixed nil pointer dereference** - Fixed reflection panic in `NewInstrument` type mismatch error
+- 🔧 **Removed dead code** - Cleaned up unreachable fallback paths in context functions
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/telemetry/v0.1.0) (December 2025)
+- ✅ **Initial Release** - Vendor-agnostic observability API
+- ✅ **Provider Interface** - Entry point for creating Tracers and Meters with shutdown support
+- ✅ **Tracer Interface** - Span-based distributed tracing with context propagation
+- ✅ **Span Interface** - Full span lifecycle with attributes, events, errors, and status
+- ✅ **Meter Interface** - Instrument creation for metrics collection
+- ✅ **Instrument Types** - Counter (monotonic/up-down) and Recorder (gauge/histogram)
+- ✅ **NoopProvider** - Default no-op implementation for graceful degradation
+- ✅ **Context Integration** - Store and retrieve providers via context
+- ✅ **Error Handling Strategy** - Configurable error handling for testing scenarios
+- ✅ **Structured Errors** - Uses `errext` package for rich error information
+- ✅ **100% Test Coverage** - Comprehensive test suite
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry)
+
+---
+
+### Telemetry Memory Package
+
+#### [v0.2.0](https://github.com/grinps/go-utils/releases/tag/telemetry/memory/v0.2.0) (December 2025)
+- ✅ **Observable Instruments** - Added `ObservableCounter[T]` and `ObservableGauge[T]` with callback registration
+- ✅ **Unified Observer Pattern** - Single instrument field for memory-optimized async observation
+- ✅ **97.4% Test Coverage** - Comprehensive test suite including observable instruments
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/telemetry/memory/v0.1.0) (December 2025)
+- ✅ **Initial Release** - In-memory telemetry implementation for testing
+- ✅ **Provider Implementation** - Full `telemetry.Provider` interface with recorded data access
+- ✅ **Tracer & Span** - Complete tracing with parent-child relationships
+- ✅ **Meter & Instruments** - Generic `Counter[T]` and `Recorder[T]` implementations
+- ✅ **RecordedSpan** - Test assertion helpers (`HasAttribute`, `GetAttribute`, `HasEvent`, `Duration`)
+- ✅ **RecordedMeasurement** - Access to recorded metric values and attributes
+- ✅ **Key-Value Options** - Minimal dependency usage with string key-value pairs for options and attributes
+- ✅ **Thread Safe** - All operations safe for concurrent use
+- ✅ **NoopProvider Fallback** - Returns noop tracer/meter after shutdown
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/memory.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/memory)
+
+---
+
+### Telemetry OTEL Package
+
+#### [v0.1.0](https://github.com/grinps/go-utils/releases/tag/telemetry/otel/v0.1.0) (December 2025)
+- ✅ **Initial Release** - OpenTelemetry-based telemetry implementation
+- ✅ **Full Provider Implementation** - Complete `telemetry.Provider` using OpenTelemetry SDK
+- ✅ **Declarative Configuration** - Uses `otelconf.OpenTelemetryConfiguration` schema
+- ✅ **Config Integration** - Load config via `config.Config` with YAML + `otelconf.ParseYAML`
+- ✅ **OTLP gRPC Export** - Built-in support for OTLP gRPC exporter (`otlp_grpc`)
+- ✅ **Resource Configuration** - Service attributes via `attributes_list` format
+- ✅ **Embedded Types** - Tracer/Meter embed OpenTelemetry counterparts for direct SDK access
+- ✅ **Observable Instruments** - Full async metrics with unified observer pattern (memory-optimized)
+- ✅ **Integration Tests** - Tests with OpenTelemetry Collector (`-tags=integration`)
+- ✅ **80.1% Test Coverage** - Comprehensive test suite
+
+**Go Documentation:** [![Go Reference](https://pkg.go.dev/badge/github.com/grinps/go-utils/telemetry/otel.svg)](https://pkg.go.dev/github.com/grinps/go-utils/telemetry/otel)
+
+---
+
 **Version:** 1.0.0  
-**Last Updated:** November 2025
+**Last Updated:** January 2026
 
 
